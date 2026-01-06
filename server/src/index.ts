@@ -4,7 +4,7 @@ import { handleIncomingRequest, handleTunnelMessage } from "./router";
 import { isSubdomainTaken, registerTunnel, removeTunnel } from "./registry";
 import { getRandomName } from "./utils/randomnames";
 
-const PORT =  process.env.SERVER_PORT;
+const PORT = Number(process.env.SERVER_PORT || 3000);
 
 // 1. The Gateway (Public Web Traffic)
 const gateway = http.createServer(handleIncomingRequest);
@@ -41,6 +41,7 @@ ws.on("message",(data)=>{
   console.log(`[Knrog] New Tunnel: ${subdomain}`);
 
   ws.on("close", () => {
+    clearInterval(heartbeat);
     removeTunnel(subdomain);
     console.log(`[Knrog] Closed: ${subdomain}`);
   });

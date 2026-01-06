@@ -85,7 +85,7 @@ const pendingRequests = new Map<string, http.ClientRequest>();
              JSON.stringify({
                type: "res_headers",
                id: message.id,
-               statusCode: localRes.statusCode,
+               statusCode: localRes.statusCode ?? 200,
                headers: localRes.headers,
              })
            );

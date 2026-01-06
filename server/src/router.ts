@@ -3,10 +3,10 @@ import { getTunnelSocket } from "./registry";
 import{ v4 }from "uuid";
 
 type TunnelMessage =
-  | { type: "request"; id: string; method?: string; url?: string; header?: any }
+  | { type: "request"; id: string; method?: string; url?: string; headers?: any }
   | { type: "req_data"; id: string; chunk: string }
   | { type: "req_end"; id: string }
-  | { type: "res_headers"; id: string; statusCode: number; header: any }
+  | { type: "res_headers"; id: string; statusCode: number; headers: any }
   | { type: "res_data"; id: string; chunk: string }
   | { type: "res_end"; id: string }
   | { type: "error"; id: string; message: string };
@@ -92,7 +92,22 @@ export const handleTunnelMessage= (raw:string)=>{
     case "res_headers":{
       if(!res)return;
       console.log(`msg for id: ${id}: ${JSON.stringify(msg,null,2)}`)
-      res.writeHead(msg.statusCode,msg.headers)
+      try {
+        // Be defensive: if the client somehow sends an invalid statusCode/headers,
+        // don't crash the gateway request.
+        const statusCode = (msg as any).statusCode ?? 200;
+        const headers = (msg as any).headers ?? {};
+        res.writeHead(statusCode, headers)
+      } catch (err) {
+        res.writeHead(502);
+        res.end("Bad Gateway: Invalid upstream response headers")
+        responses.delete(id)
+        const timeout = timeouts.get(id);
+        if (timeout) {
+          clearTimeout(timeout);
+          timeouts.delete(id);
+        }
+      }
       break;
     }
     case"res_data":{
