@@ -82,7 +82,15 @@ const pendingRequests = new Map<string, http.ClientRequest>();
            headers: cleanHeaders,
          },
          (localRes) => {
-           console.log(`[Client] Received response from localhost for ${message.id}, status: ${localRes.statusCode}`);
+          const now = new Date();
+          const time = now.toLocaleTimeString();
+          const date = now.toLocaleDateString();
+          // `method` and `url` are available in this scope
+          console.log(
+            `[Client] ${date} ${time} — ${method} ${url} → ${localRes.statusCode} ${
+              localRes.statusMessage || ""
+            }`
+          );
            ws.send(
              JSON.stringify({
                type: "res_headers",
@@ -91,7 +99,7 @@ const pendingRequests = new Map<string, http.ClientRequest>();
                headers: localRes.headers,
              })
            );
-           console.log(`[Client] Sent res_headers to server for ${message.id}`);
+          //  console.log(`[Client] Sent res_headers to server for ${message.id}`);
 
            localRes.on("data", (chunk) => {
              ws.send(
@@ -104,7 +112,7 @@ const pendingRequests = new Map<string, http.ClientRequest>();
            });
 
            localRes.on("end", () => {
-             console.log(`[Client] Response complete for ${message.id}, sending res_end`);
+            //  console.log(`[Client] Response complete for ${message.id}, sending res_end`);
              ws.send(
                JSON.stringify({
                  type: "res_end",
