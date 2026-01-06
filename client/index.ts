@@ -11,7 +11,7 @@ program
   .option(
     "-s, --server <url>",
     "Knrog server URL",
-    `wss://${process.env.DOMAIN_CONNECTION}`
+    "wss://knrog.online"  // Default to local for testing
   )
   .action((port: string, options) => {
     const localPort = parseInt(port);
@@ -57,6 +57,7 @@ const pendingRequests = new Map<string, http.ClientRequest>();
        const method = message.method || "GET";
        const url = message.url || "/";
        console.log(`[${timestamp}] ${method} ${url}`);
+       console.log(`[Client] Forwarding request ${message.id} to localhost:${localPort}`);
        
        // Filter out problematic headers
        const cleanHeaders = { ...message.headers };
@@ -81,6 +82,7 @@ const pendingRequests = new Map<string, http.ClientRequest>();
            headers: cleanHeaders,
          },
          (localRes) => {
+           console.log(`[Client] Received response from localhost for ${message.id}, status: ${localRes.statusCode}`);
            ws.send(
              JSON.stringify({
                type: "res_headers",
@@ -89,6 +91,7 @@ const pendingRequests = new Map<string, http.ClientRequest>();
                headers: localRes.headers,
              })
            );
+           console.log(`[Client] Sent res_headers to server for ${message.id}`);
 
            localRes.on("data", (chunk) => {
              ws.send(
@@ -101,6 +104,7 @@ const pendingRequests = new Map<string, http.ClientRequest>();
            });
 
            localRes.on("end", () => {
+             console.log(`[Client] Response complete for ${message.id}, sending res_end`);
              ws.send(
                JSON.stringify({
                  type: "res_end",

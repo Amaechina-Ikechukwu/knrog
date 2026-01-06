@@ -21,6 +21,7 @@ export const handleIncomingRequest = (
   const host = req.headers.host || "";
   // Extract 'meat' from 'meat.knrog.com'
   const subdomain = host.split(".")[0] || "";
+  console.log(`[Gateway] Incoming ${req.method} ${req.url} for subdomain: ${subdomain}`);
 
   const socket = getTunnelSocket(subdomain);
 
@@ -43,6 +44,7 @@ export const handleIncomingRequest = (
   timeouts.set(id, timeout); // STORE IT
 
   // Send the request details to the CLI client via WebSocket
+  console.log(`[Gateway] Forwarding request ${id} to tunnel`);
   socket.send(
     JSON.stringify({
       type: "request",
@@ -58,18 +60,6 @@ export const handleIncomingRequest = (
       JSON.stringify({ type: "req_data", id, chunk: chunk.toString("base64") })
     );
   });
-
-  //Delete id on close
- req.on("close", () => {
-   responses.delete(id);
-
-   //ADD TIMEOUT CLEANUP HERE TOO
-   const timeout = timeouts.get(id);
-   if (timeout) {
-     clearTimeout(timeout);
-     timeouts.delete(id);
-   }
- });
 
   req.on("end", () => {
     socket.send(JSON.stringify({ type: "req_end", id }));
@@ -90,8 +80,11 @@ export const handleTunnelMessage= (raw:string)=>{
   const res = responses.get(id);
   switch(msg.type){
     case "res_headers":{
-      if(!res)return;
-      console.log(`msg for id: ${id}: ${JSON.stringify(msg,null,2)}`)
+      if(!res){
+        console.log(`[Gateway] WARNING: No response object for id ${id}`);
+        return;
+      }
+      console.log(`[Gateway] Received res_headers for ${id}, status: ${(msg as any).statusCode}`);
       try {
         // Be defensive: if the client somehow sends an invalid statusCode/headers,
         // don't crash the gateway request.
