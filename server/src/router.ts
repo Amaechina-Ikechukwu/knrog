@@ -12,7 +12,7 @@ type TunnelMessage =
   | { type: "error"; id: string; message: string };
 
 const responses = new Map<string,ServerResponse>();
-
+const timeouts = new Map<string, NodeJS.Timeout>(); 
 
 export const handleIncomingRequest = (
   req: IncomingMessage,
@@ -20,7 +20,7 @@ export const handleIncomingRequest = (
 ) => {
   const host = req.headers.host || "";
   // Extract 'meat' from 'meat.knrog.com'
-  const subdomain = host.split(".")[0]||"";
+  const subdomain = host.split(".")[0] || "";
 
   const socket = getTunnelSocket(subdomain);
 
@@ -28,20 +28,19 @@ export const handleIncomingRequest = (
     res.writeHead(404);
     return res.end(`Knrog Error: No tunnel found for ${subdomain}`);
   }
-  const id = v4()
-//set id
-  responses.set(id,res)
+  const id = v4();
+  //set id
+  responses.set(id, res);
   const timeout = setTimeout(() => {
-    if(responses.has(id)){
-      res.writeHead(504)
+    if (responses.has(id)) {
+      res.writeHead(504);
       res.end("Gateway Timeout: Local tunnel took too long to respond.");
-      responses.delete(id)
+      responses.delete(id);
+      timeouts.delete(id); //  CLEAN UP
     }
   }, 30000);
 
-  //clear timeout
-  res.on('finish',()=>clearTimeout(timeout))
-
+  timeouts.set(id, timeout); // STORE IT
 
   // Send the request details to the CLI client via WebSocket
   socket.send(
@@ -51,23 +50,32 @@ export const handleIncomingRequest = (
       id,
       url: req.url,
       headers: req.headers,
-      status:req.statusCode,
-      statusMessage:req.statusMessage
+      status: req.statusCode,
+      statusMessage: req.statusMessage,
     })
   );
 
- req.on("data",(chunk)=>{
-  socket.send(JSON.stringify({type:"req_data",id,chunk:chunk.toString("base64")}))
+  req.on("data", (chunk) => {
+    socket.send(
+      JSON.stringify({ type: "req_data", id, chunk: chunk.toString("base64") })
+    );
+  });
+
+  //Delete id on close
+ req.on("close", () => {
+   responses.delete(id);
+
+   //ADD TIMEOUT CLEANUP HERE TOO
+   const timeout = timeouts.get(id);
+   if (timeout) {
+     clearTimeout(timeout);
+     timeouts.delete(id);
+   }
  });
 
- //Delete id on close
- req.on("close",()=>{
-  responses.delete(id)
- })
-
- req.on("end",()=>{
-  socket.send(JSON.stringify({type:"req_end",id}));
- })
+  req.on("end", () => {
+    socket.send(JSON.stringify({ type: "req_end", id }));
+  });
 };
 
 

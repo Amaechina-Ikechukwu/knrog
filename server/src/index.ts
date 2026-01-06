@@ -18,6 +18,16 @@ wss.on("connection", (ws) => {
     subdomain = getRandomName(); // Try again until we get a unique one
   }
   registerTunnel(subdomain, ws);
+  const heartbeat = setInterval(()=>{
+    if(ws.readyState===ws.OPEN){
+      ws.ping()
+    }else{
+      clearInterval(heartbeat)
+    }
+  },30000)
+  ws.on("pong",()=>{
+    console.log("Received a pong")
+  })
 ws.on("message",(data)=>{
   try{
     handleTunnelMessage(data.toString())
@@ -25,6 +35,7 @@ ws.on("message",(data)=>{
     console.warn("Error handling tunnel message:", err)
   }
 })
+
   // Tell the client its URL
   ws.send(JSON.stringify({ type: "init", subdomain }));
   console.log(`[Knrog] New Tunnel: ${subdomain}`);
