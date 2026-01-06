@@ -8,7 +8,11 @@ program
   .name("knrog")
   .description("Expose your local server to the internet")
   .argument("<port>", "Local port to expose")
-  .option("-s, --server <url>", "Knrog server URL", "ws://localhost:9000")
+  .option(
+    "-s, --server <url>",
+    "Knrog server URL",
+    `wss://${process.env.DOMAIN_CONNECTION}`
+  )
   .action((port: string, options) => {
     const localPort = parseInt(port);
     const serverUrl = options.server;
@@ -40,7 +44,9 @@ function startTunnel(localPort: number, serverUrl: string) {
       console.log(`\n┌─────────────────────────────────────────┐`);
       console.log(`│  🌐 Your tunnel is live!               │`);
       console.log(`│                                         │`);
-      console.log(`│  ${message.subdomain}.knrog.com              │`);
+      console.log(
+        `│  ${message.subdomain}.${process.env.DOMAIN_CONNECTION}              │`
+      );
       console.log(`│                                         │`);
       console.log(`│  → localhost:${localPort.toString().padEnd(27)}│`);
       console.log(`└─────────────────────────────────────────┘\n`);
