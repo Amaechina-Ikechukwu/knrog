@@ -50,8 +50,6 @@ export const handleIncomingRequest = (
       id,
       url: req.url,
       headers: req.headers,
-      status: req.statusCode,
-      statusMessage: req.statusMessage,
     })
   );
 
@@ -94,7 +92,7 @@ export const handleTunnelMessage= (raw:string)=>{
     case "res_headers":{
       if(!res)return;
       console.log(`msg for id: ${id}: ${JSON.stringify(msg,null,2)}`)
-      res.writeHead(msg.statusCode,msg.header)
+      res.writeHead(msg.statusCode,msg.headers)
       break;
     }
     case"res_data":{
