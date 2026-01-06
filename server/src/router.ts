@@ -1,26 +1,54 @@
 import { IncomingMessage, ServerResponse } from "http";
 import { getTunnelSocket } from "./registry";
+import{ v4 }from "uuid";
+
+type TunnelMessage =
+  | { type: "request"; id: string; method?: string; url?: string; header?: any }
+  | { type: "req_data"; id: string; chunk: string }
+  | { type: "req_end"; id: string }
+  | { type: "res_headers"; id: string; statusCode: number; header: any }
+  | { type: "res_data"; id: string; chunk: string }
+  | { type: "res_end"; id: string }
+  | { type: "error"; id: string; message: string };
+
+const responses = new Map<string,ServerResponse>();
+
 
 export const handleIncomingRequest = (
   req: IncomingMessage,
   res: ServerResponse
 ) => {
   const host = req.headers.host || "";
-  // Extract 'meat' from 'meat.relife.com'
+  // Extract 'meat' from 'meat.knrog.com'
   const subdomain = host.split(".")[0]||"";
 
   const socket = getTunnelSocket(subdomain);
 
   if (!socket) {
     res.writeHead(404);
-    return res.end(`Relife Error: No tunnel found for ${subdomain}`);
+    return res.end(`Knrog Error: No tunnel found for ${subdomain}`);
   }
+  const id = v4()
+//set id
+  responses.set(id,res)
+  const timeout = setTimeout(() => {
+    if(responses.has(id)){
+      res.writeHead(504)
+      res.end("Gateway Timeout: Local tunnel took too long to respond.");
+      responses.delete(id)
+    }
+  }, 30000);
+
+  //clear timeout
+  res.on('finish',()=>clearTimeout(timeout))
+
 
   // Send the request details to the CLI client via WebSocket
   socket.send(
     JSON.stringify({
       type: "request",
       method: req.method,
+      id,
       url: req.url,
       headers: req.headers,
       status:req.statusCode,
@@ -28,8 +56,61 @@ export const handleIncomingRequest = (
     })
   );
 
-  // Industry Tip: For a full version, you would use a 'Response Map'
-  // to hold the 'res' object until the client sends back the body.
-  res.write(`Request forwarded to ${subdomain}...`);
-  res.end();
+ req.on("data",(chunk)=>{
+  socket.send(JSON.stringify({type:"req_data",id,chunk:chunk.toString("base64")}))
+ });
+
+ //Delete id on close
+ req.on("close",()=>{
+  responses.delete(id)
+ })
+
+ req.on("end",()=>{
+  socket.send(JSON.stringify({type:"req_end",id}));
+ })
 };
+
+
+
+export const handleTunnelMessage= (raw:string)=>{
+  let msg:TunnelMessage;
+  try{
+    msg=JSON.parse(raw);
+  }catch(err){
+    console.warn("Malformed tunnel message")
+    return
+  }
+  const id = (msg as any).id;
+  const res = responses.get(id);
+  switch(msg.type){
+    case "res_headers":{
+      if(!res)return;
+      console.log(`msg for id: ${id}: ${JSON.stringify(msg,null,2)}`)
+      res.writeHead(msg.statusCode,msg.header)
+      break;
+    }
+    case"res_data":{
+      if(!res)return;
+      const buf = Buffer.from(msg.chunk,"base64")
+      res.write(buf)
+      break;
+    }
+    case "res_end":{
+      if(!res) return;
+      res.end();
+      responses.delete(id);
+      break;
+    }
+    case 'error':{
+      if(res){
+        res.writeHead(502);
+        res.end("Upstrean error:"+msg.message)
+        responses.delete(id)
+      }
+      break;
+    }
+    default:{
+      break;
+    }
+  }
+}

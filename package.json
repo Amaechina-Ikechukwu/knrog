@@ -1,5 +1,5 @@
 {
-  "name": "relife",
+  "name": "knrog",
   "module": "index.ts",
   "type": "module",
   "private": true,
@@ -13,6 +13,8 @@
     "@types/ws": "^8.18.1",
     "commander": "^14.0.2",
     "unique-names-generator": "^4.7.1",
+    "uuid": "^13.0.0",
+    "uuidv4": "^6.2.13",
     "ws": "^8.18.3"
   }
 }
