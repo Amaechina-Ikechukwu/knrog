@@ -6,6 +6,7 @@ module.exports = {
       interpreter: "bun", // or "node"
       env: {
         NODE_ENV: "production",
+        SERVER_PORT: 9000,  // Set your server port
       },
     },
   ],

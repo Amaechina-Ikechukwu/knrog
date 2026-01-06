@@ -1,7 +1,7 @@
 // client/index.ts
 import { WebSocket } from "ws";
 import { Command } from "commander";
-
+import http from "http"
 const program = new Command();
 
 program
@@ -32,7 +32,7 @@ function startTunnel(localPort: number, serverUrl: string) {
   console.log(`[Knrog] Forwarding to localhost:${localPort}`);
 
   const ws = new WebSocket(serverUrl);
-
+const pendingRequests = new Map<string, http.ClientRequest>();
   ws.on("open", () => {
     console.log("[Knrog] ✓ Connected to server!");
   });
@@ -52,16 +52,105 @@ function startTunnel(localPort: number, serverUrl: string) {
       console.log(`└─────────────────────────────────────────┘\n`);
     }
 
-     if (message.type === "request" || message.type === "open") {
-      console.debug("Knrog: frame:", JSON.stringify(message, null, 2));
+     if (message.type === "request") {
        const timestamp = new Date().toLocaleTimeString();
        const method = message.method || "GET";
        const url = message.url || "/";
        console.log(`[${timestamp}] ${method} ${url}`);
+       
+       // Filter out problematic headers
+       const cleanHeaders = { ...message.headers };
+       delete cleanHeaders['connection'];
+       delete cleanHeaders['upgrade'];
+       delete cleanHeaders['host'];
+       delete cleanHeaders['cf-ray'];
+       delete cleanHeaders['cf-connecting-ip'];
+       delete cleanHeaders['cf-ipcountry'];
+       delete cleanHeaders['cf-visitor'];
+       delete cleanHeaders['cdn-loop'];
+       delete cleanHeaders['x-forwarded-for'];
+       delete cleanHeaders['x-forwarded-proto'];
+       delete cleanHeaders['x-real-ip'];
+       
+       const localReq = http.request(
+         {
+           host: "localhost",
+           port: localPort,
+           method: message.method,
+           path: message.url,
+           headers: cleanHeaders,
+         },
+         (localRes) => {
+           ws.send(
+             JSON.stringify({
+               type: "res_headers",
+               id: message.id,
+               statusCode: localRes.statusCode,
+               headers: localRes.headers,
+             })
+           );
 
-       // optional debug: full frame when fields missing
-       if (!message.method || !message.url) {
-         console.debug("Knrog: frame:", JSON.stringify(message, null, 2));
+           localRes.on("data", (chunk) => {
+             ws.send(
+               JSON.stringify({
+                 type: "res_data",
+                 id: message.id,
+                 chunk: chunk.toString("base64"),
+               })
+             );
+           });
+
+           localRes.on("end", () => {
+             ws.send(
+               JSON.stringify({
+                 type: "res_end",
+                 id: message.id,
+               })
+             );
+             pendingRequests.delete(message.id);
+           });
+         }
+       );
+       localReq.on("error", (err) => {
+         console.error(
+           `[Knrog] Error forwarding to localhost:${localPort}:`,
+           err.message
+         );
+         ws.send(
+           JSON.stringify({
+             type: "error",
+             id: message.id,
+             message: err.message,
+           })
+         );
+         pendingRequests.delete(message.id);
+       });
+       // Store the request so we can write body data to it later
+       pendingRequests.set(message.id, localReq);
+       
+       // For GET requests (no body), end immediately
+       if (method === "GET" || method === "HEAD") {
+         localReq.end();
+       }
+       
+       return;
+     }
+     
+     // Handle request body chunks
+     if (message.type === "req_data") {
+       const pendingReq = pendingRequests.get(message.id);
+       if (pendingReq) {
+         const chunk = Buffer.from(message.chunk, "base64");
+         pendingReq.write(chunk);
+       }
+       return;
+     }
+
+     // Handle request body end
+     if (message.type === "req_end") {
+       const pendingReq = pendingRequests.get(message.id);
+       if (pendingReq) {
+         pendingReq.end();
        }
        return;
      }

@@ -107,13 +107,25 @@ export const handleTunnelMessage= (raw:string)=>{
       if(!res) return;
       res.end();
       responses.delete(id);
+      
+      const timeout = timeouts.get(id);
+      if (timeout) {
+        clearTimeout(timeout);
+        timeouts.delete(id);
+      }
       break;
     }
     case 'error':{
       if(res){
         res.writeHead(502);
-        res.end("Upstrean error:"+msg.message)
+        res.end("Upstream error: "+msg.message)
         responses.delete(id)
+        
+        const timeout = timeouts.get(id);
+        if (timeout) {
+          clearTimeout(timeout);
+          timeouts.delete(id);
+        }
       }
       break;
     }
