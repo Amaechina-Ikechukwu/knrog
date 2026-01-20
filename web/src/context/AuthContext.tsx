@@ -92,7 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!response.ok) throw new Error('Failed to fetch domains');
 
       const data = await response.json();
-      setDomains(data);
+      // API now returns { domains, isPaid, totalDomains, domainLimit }
+      setDomains(data.domains || data);
       lastDomainsFetch = now;
     } catch (error) {
       console.error('Failed to fetch domains:', error);

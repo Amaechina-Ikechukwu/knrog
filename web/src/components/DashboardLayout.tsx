@@ -3,6 +3,7 @@ import { Box, Typography, Button, CircularProgress } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import DnsIcon from '@mui/icons-material/Dns';
+import HistoryIcon from '@mui/icons-material/History';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useAuth } from '../context/AuthContext';
 
@@ -17,6 +18,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard', icon: <DashboardIcon sx={{ fontSize: 14 }} /> },
   { label: 'Domains', path: '/domains', icon: <DnsIcon sx={{ fontSize: 14 }} /> },
+  { label: 'Logs', path: '/logs', icon: <HistoryIcon sx={{ fontSize: 14 }} /> },
 ];
 
 interface DashboardLayoutProps {

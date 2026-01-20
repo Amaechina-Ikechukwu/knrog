@@ -110,25 +110,34 @@ wss.on("connection", async (ws, req) => {
 
   // Enforce Connection Limit FIRST (before creating subdomain)
   const activeConnections = getConnectionCount(user.id);
-  const LIMIT = user.isPaid ? Infinity : 5;
+  const CONNECTION_LIMIT = user.isPaid ? Infinity : 5;
 
-  if (activeConnections >= LIMIT) {
+  if (activeConnections >= CONNECTION_LIMIT) {
     ws.close(1008, "Connection limit reached. Upgrade for more.");
     return;
   }
 
-  // Check if user can reuse subdomains (paid users or special email)
+  // Check if user has paid-tier access
   const SPECIAL_EMAILS = ["amaechinaikechukwu6@gmail.com"];
-  const canReuseSubdomain = user.isPaid || SPECIAL_EMAILS.includes(user.email);
+  const hasPaidAccess = user.isPaid || SPECIAL_EMAILS.includes(user.email);
 
-  // Determine Subdomain (only after connection limit check passes)
+  // Get user's existing domains (ordered by creation date, oldest first)
+  const userDomains = await db.query.domains.findMany({
+    where: eq(domains.userId, user.id),
+    orderBy: (domains, { asc }) => [asc(domains.createdAt)],
+  });
+
+  // Determine Subdomain
   let subdomain = requestedSubdomain;
   
   if (subdomain) {
-    // User is requesting a specific subdomain - check permissions
-    if (!canReuseSubdomain) {
-      ws.close(1008, "Subdomain reuse is a paid feature. Upgrade to reuse subdomains.");
-      return;
+    // User is requesting a specific subdomain
+    if (!hasPaidAccess) {
+      // Free users can only reuse their FIRST domain
+      if (userDomains.length > 0 && subdomain !== userDomains[0]!.subdomain) {
+        ws.close(1008, "Free tier: You can only use your first domain. Upgrade for more.");
+        return;
+      }
     }
 
     const existingDomain = await db.query.domains.findFirst({
@@ -145,6 +154,11 @@ wss.on("connection", async (ws, req) => {
         return;
       }
     } else {
+      // Creating a new domain
+      if (!hasPaidAccess && userDomains.length >= 1) {
+        ws.close(1008, "Free tier: Domain limit reached (1/1). Upgrade for unlimited domains.");
+        return;
+      }
       try {
         await db.insert(domains).values({ subdomain, userId: user.id });
       } catch {
@@ -153,17 +167,26 @@ wss.on("connection", async (ws, req) => {
       }
     }
   } else {
-    // Generate a new random subdomain
-    subdomain = getRandomName();
-    while (await db.query.domains.findFirst({ where: eq(domains.subdomain, subdomain) })) {
-       subdomain = getRandomName();
+    // Generating a new random subdomain
+    // Free users: can only have 1 domain, so check limit first
+    if (!hasPaidAccess && userDomains.length >= 1) {
+      // Free users with existing domain should reuse it
+      subdomain = userDomains[0]!.subdomain;
+      if (isSubdomainTaken(subdomain)) {
+        ws.close(1008, "Your domain is currently active in another session. Free tier allows 1 domain.");
+        return;
+      }
+    } else {
+      // Create new random subdomain (paid users or free users with no domain yet)
+      subdomain = getRandomName();
+      while (await db.query.domains.findFirst({ where: eq(domains.subdomain, subdomain) })) {
+        subdomain = getRandomName();
+      }
+      await db.insert(domains).values({ subdomain, userId: user.id });
     }
-    await db.insert(domains).values({ subdomain, userId: user.id });
-  }
-    return;
   }
   
-  registerTunnel(subdomain, ws, user.id); 
+  registerTunnel(subdomain, ws, user.id, hasPaidAccess); 
   
   const heartbeat = setInterval(() => {
     if (ws.readyState === ws.OPEN) {
@@ -177,14 +200,14 @@ wss.on("connection", async (ws, req) => {
   
   ws.on("message", (data) => {
     try {
-      handleTunnelMessage(data.toString());
+      handleTunnelMessage(data.toString(), user.id, hasPaidAccess);
     } catch (err) {
       console.warn("Error handling tunnel message:", err);
     }
   });
 
   ws.send(JSON.stringify({ type: "init", subdomain }));
-  console.log(`[Knrog] New Tunnel: ${subdomain} (User: ${user.email})`);
+  console.log(`[Knrog] New Tunnel: ${subdomain} (User: ${user.email}, Paid: ${hasPaidAccess})`);
 
   ws.on("close", () => {
     clearInterval(heartbeat);

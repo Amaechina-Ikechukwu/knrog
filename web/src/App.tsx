@@ -7,6 +7,7 @@ import RegisterPage from './pages/RegisterPage';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import DomainsPage from './pages/DomainsPage';
+import LogsPage from './pages/LogsPage';
 import VerifyPage from './pages/VerifyPage';
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/domains" element={<DomainsPage />} />
+            <Route path="/logs" element={<LogsPage />} />
             <Route path="/verify" element={<VerifyPage />} />
           </Routes>
         </AuthProvider>

@@ -15,6 +15,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import LockIcon from '@mui/icons-material/Lock';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 
@@ -22,9 +23,9 @@ export default function DomainsPage() {
   const navigate = useNavigate();
   const { user, domains, loading, fetchDomains } = useAuth();
   
-  // Check if user can reuse subdomains
+  // Check if user has paid-tier access
   const SPECIAL_EMAILS = ["amaechinaikechukwu6@gmail.com"];
-  const canReuseSubdomain = user?.isPaid || (user?.email && SPECIAL_EMAILS.includes(user.email));
+  const hasPaidAccess = user?.isPaid || (user?.email && SPECIAL_EMAILS.includes(user.email));
 
   useEffect(() => {
     fetchDomains();
@@ -56,9 +57,37 @@ export default function DomainsPage() {
             Refresh
           </Button>
         </Box>
-        <Typography variant="body1" sx={{ mb: 4, color: '#666' }}>
-          Your registered tunnel domains
+        <Typography variant="body1" sx={{ mb: 2, color: '#666' }}>
+          {hasPaidAccess 
+            ? 'Your registered tunnel domains' 
+            : 'Your tunnel domain (Free tier: 1 domain)'}
         </Typography>
+
+        {/* Free tier domain limit banner */}
+        {!hasPaidAccess && domains.length > 0 && (
+          <Box
+            sx={{
+              mb: 3,
+              p: 2,
+              borderRadius: 1,
+              border: '1px solid rgba(255, 193, 7, 0.3)',
+              background: 'rgba(255, 193, 7, 0.05)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+            }}
+          >
+            <LockIcon sx={{ color: '#ffc107', fontSize: 18 }} />
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="body2" sx={{ color: '#ffc107', fontSize: '0.75rem', fontWeight: 500 }}>
+                Domain Limit: 1/1
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#888', fontSize: '0.7rem' }}>
+                Upgrade to create unlimited domains
+              </Typography>
+            </Box>
+          </Box>
+        )}
 
         {loading && domains.length === 0 ? (
           <CircularProgress size={16} sx={{ color: '#666' }} />
@@ -151,7 +180,7 @@ export default function DomainsPage() {
         )}
 
         {/* Subdomain Reuse Instructions */}
-        {canReuseSubdomain && domains.length > 0 && (
+        {hasPaidAccess && domains.length > 0 && (
           <Box
             sx={{
               mt: 4,
@@ -190,7 +219,7 @@ export default function DomainsPage() {
           </Box>
         )}
 
-        {!canReuseSubdomain && domains.length > 0 && (
+        {!hasPaidAccess && domains.length > 0 && (
           <Box
             sx={{
               mt: 4,
