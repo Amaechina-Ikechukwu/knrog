@@ -20,7 +20,11 @@ import { useAuth } from '../context/AuthContext';
 
 export default function DomainsPage() {
   const navigate = useNavigate();
-  const { domains, loading, fetchDomains } = useAuth();
+  const { user, domains, loading, fetchDomains } = useAuth();
+  
+  // Check if user can reuse subdomains
+  const SPECIAL_EMAILS = ["amaechinaikechukwu6@gmail.com"];
+  const canReuseSubdomain = user?.isPaid || (user?.email && SPECIAL_EMAILS.includes(user.email));
 
   useEffect(() => {
     fetchDomains();
@@ -143,6 +147,65 @@ export default function DomainsPage() {
                 </Table>
               </TableContainer>
             )}
+          </Box>
+        )}
+
+        {/* Subdomain Reuse Instructions */}
+        {canReuseSubdomain && domains.length > 0 && (
+          <Box
+            sx={{
+              mt: 4,
+              p: 3,
+              borderRadius: 1,
+              border: '1px solid rgba(80, 227, 194, 0.15)',
+              background: 'rgba(80, 227, 194, 0.03)',
+            }}
+          >
+            <Typography variant="body2" sx={{ color: '#50e3c2', mb: 1.5, fontWeight: 500 }}>
+              ✨ Subdomain Reuse (Premium Feature)
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#888', mb: 2, fontSize: '0.75rem' }}>
+              As a premium user, you can reuse your subdomains. Use the <code style={{ color: '#e0e0e0', background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>--reuse</code> flag or specify a subdomain:
+            </Typography>
+            <Box
+              sx={{
+                fontFamily: 'monospace',
+                fontSize: '0.75rem',
+                color: '#e0e0e0',
+                background: 'rgba(0,0,0,0.3)',
+                p: 2,
+                borderRadius: 1,
+                '& .comment': { color: '#666' },
+              }}
+            >
+              <Box sx={{ mb: 1 }}>
+                <span className="comment"># Reuse your last subdomain</span>
+              </Box>
+              <Box sx={{ mb: 2 }}>knrog 3000 --reuse</Box>
+              <Box sx={{ mb: 1 }}>
+                <span className="comment"># Or specify a subdomain you own</span>
+              </Box>
+              <Box>knrog 3000 --subdomain {domains[0]?.subdomain || 'my-subdomain'}</Box>
+            </Box>
+          </Box>
+        )}
+
+        {!canReuseSubdomain && domains.length > 0 && (
+          <Box
+            sx={{
+              mt: 4,
+              p: 3,
+              borderRadius: 1,
+              border: '1px solid rgba(255,255,255,0.06)',
+              background: 'rgba(255,255,255,0.02)',
+            }}
+          >
+            <Typography variant="body2" sx={{ color: '#888', mb: 1 }}>
+              💡 Want to reuse your subdomains?
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#666', fontSize: '0.75rem' }}>
+              Upgrade to a paid plan to keep the same subdomain across sessions.
+            </Typography>
           </Box>
         )}
       </Box>

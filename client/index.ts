@@ -17,7 +17,8 @@ program
     "wss://api.knrog.online"
   )
   .option("-k, --api-key <key>", "API Key for authentication")
-  .option("-d, --subdomain <name>", "Request a specific subdomain")
+  .option("-d, --subdomain <name>", "Request a specific subdomain (paid users only)")
+  .option("-r, --reuse", "Reuse your last subdomain (paid users only)")
   .action(async (port: string, options) => {
     const localPort = parseInt(port);
     const serverUrl = options.server;
@@ -29,7 +30,15 @@ program
 
     // Load configuration
     const config = loadConfig();
-    const subdomain = options.subdomain || config.lastSubdomain;
+    
+    // Only reuse subdomain if explicitly requested with --reuse flag or --subdomain
+    let subdomain: string | undefined;
+    if (options.subdomain) {
+      subdomain = options.subdomain;
+    } else if (options.reuse && config.lastSubdomain) {
+      subdomain = config.lastSubdomain;
+      console.log(`[Knrog] Reusing subdomain: ${subdomain}`);
+    }
 
     // Get or create API key
     const apiKey = await getOrCreateApiKey(serverUrl, options.apiKey, config.apiKey);

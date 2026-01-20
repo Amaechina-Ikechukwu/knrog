@@ -108,10 +108,20 @@ wss.on("connection", async (ws, req) => {
     return;
   }
 
+  // Check if user can reuse subdomains (paid users or special email)
+  const SPECIAL_EMAILS = ["amaechinaikechukwu6@gmail.com"];
+  const canReuseSubdomain = user.isPaid || SPECIAL_EMAILS.includes(user.email);
+
   // Determine Subdomain
   let subdomain = requestedSubdomain;
   
   if (subdomain) {
+    // User is requesting a specific subdomain - check permissions
+    if (!canReuseSubdomain) {
+      ws.close(1008, "Subdomain reuse is a paid feature. Upgrade to reuse subdomains.");
+      return;
+    }
+
     const existingDomain = await db.query.domains.findFirst({
       where: eq(domains.subdomain, subdomain),
     });
@@ -134,6 +144,7 @@ wss.on("connection", async (ws, req) => {
       }
     }
   } else {
+    // Generate a new random subdomain
     subdomain = getRandomName();
     while (await db.query.domains.findFirst({ where: eq(domains.subdomain, subdomain) })) {
        subdomain = getRandomName();
