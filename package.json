@@ -3,18 +3,41 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "test-server": "bun run index.ts",
+    "cli": "bun run client/index.ts",
+    "dev": "bun run server/src/index.ts"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bcryptjs": "^3.0.0",
+    "@types/bun": "latest",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/pg": "^8.16.0",
+    "dotenv": "^17.2.3",
+    "drizzle-kit": "^0.31.8"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
     "@types/ws": "^8.18.1",
+    "bcryptjs": "^3.0.3",
     "commander": "^14.0.2",
+    "cors": "^2.8.5",
+    "drizzle-orm": "^0.45.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.17.1",
+    "postgres": "^3.4.8",
+    "resend": "^6.7.0",
     "unique-names-generator": "^4.7.1",
     "uuid": "^13.0.0",
     "uuidv4": "^6.2.13",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "zod": "^4.3.5"
   }
 }

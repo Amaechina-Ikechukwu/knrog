@@ -1,0 +1,46 @@
+{
+  "name": "knrog",
+  "version": "1.0.0",
+  "description": "Expose your local server to the internet with secure tunnels",
+  "author": "Knrog",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "knrog": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "tunnel",
+    "localhost",
+    "expose",
+    "ngrok",
+    "cli",
+    "development",
+    "http",
+    "websocket"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Amaechina-Ikechukwu/knrog"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "commander": "^14.0.2",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.7.0"
+  }
+}
