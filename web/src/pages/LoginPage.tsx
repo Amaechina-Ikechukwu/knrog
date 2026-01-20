@@ -12,11 +12,13 @@ import {
 } from '@mui/material';
 import { useNavigate, Link } from 'react-router-dom';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { useAuth } from '../context/AuthContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9000';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { fetchUser } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -49,6 +51,9 @@ export default function LoginPage() {
       // Store token
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
+
+      // Fetch user data to update AuthContext
+      await fetchUser();
 
       navigate('/dashboard');
     } catch (err) {
