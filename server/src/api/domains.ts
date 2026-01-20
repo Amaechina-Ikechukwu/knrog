@@ -17,10 +17,13 @@ const hasPaidAccess = (user: { isPaid: boolean; email: string }) => {
 
 // GET /api/domains - Get domains for the authenticated user
 // Free users: only see their FIRST domain
-// Paid users: see all domains
+// Paid users: see all domains (paginated)
 router.get("/", authMiddleware, async (req: any, res) => {
   try {
     const userId = req.user.userId;
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit as string) || 20), 100);
+    const offset = (page - 1) * limit;
 
     // Get user to check paid status
     const user = await db.query.users.findFirst({
@@ -41,9 +44,13 @@ router.get("/", authMiddleware, async (req: any, res) => {
 
     // For free users, only return their first domain
     const visibleDomains = isPaid ? userDomains : userDomains.slice(0, 1);
+    const totalDomains = visibleDomains.length;
+    
+    // Apply pagination
+    const paginatedDomains = visibleDomains.slice(offset, offset + limit);
 
     // Map domains with online status
-    const domainsWithStatus = visibleDomains.map((domain) => ({
+    const domainsWithStatus = paginatedDomains.map((domain) => ({
       subdomain: domain.subdomain,
       createdAt: domain.createdAt,
       lastUsedAt: domain.lastUsedAt,
@@ -53,8 +60,11 @@ router.get("/", authMiddleware, async (req: any, res) => {
     res.json({
       domains: domainsWithStatus,
       isPaid,
-      totalDomains: userDomains.length,
+      totalDomains,
       domainLimit: isPaid ? null : 1, // null = unlimited
+      page,
+      limit,
+      totalPages: Math.ceil(totalDomains / limit),
     });
   } catch (error) {
     console.error("Get domains error:", error);
@@ -132,14 +142,23 @@ router.get("/logs", authMiddleware, async (req: any, res) => {
 
     // Get query params for filtering
     const subdomain = req.query.subdomain as string | undefined;
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
-    const offset = parseInt(req.query.offset as string) || 0;
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit as string) || 50), 200);
+    const offset = (page - 1) * limit;
 
     // Build query
     const whereClause = subdomain
       ? and(eq(domainLogs.userId, userId), eq(domainLogs.subdomain, subdomain))
       : eq(domainLogs.userId, userId);
 
+    // Get total count
+    const allLogs = await db.query.domainLogs.findMany({
+      where: whereClause,
+      columns: { id: true },
+    });
+    const totalLogs = allLogs.length;
+
+    // Get paginated logs
     const logs = await db.query.domainLogs.findMany({
       where: whereClause,
       orderBy: (logs) => [desc(logs.createdAt)],
@@ -150,6 +169,10 @@ router.get("/logs", authMiddleware, async (req: any, res) => {
     res.json({
       logs,
       isPaid: true,
+      page,
+      limit,
+      totalLogs,
+      totalPages: Math.ceil(totalLogs / limit),
     });
   } catch (error) {
     console.error("Get logs error:", error);

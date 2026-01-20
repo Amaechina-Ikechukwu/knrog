@@ -33,7 +33,7 @@ export function startTunnel(
       config.lastSubdomain = message.subdomain;
       saveConfig(config);
       
-      const domain = process.env.DOMAIN_CONNECTION || "knrog.online";
+      const domain = "app.knrog.online";
       const fullUrl = `https://${message.subdomain}.${domain}`;
       
       console.log(`[Knrog] ✓ Connected to server!`);

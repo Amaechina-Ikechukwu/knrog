@@ -4,8 +4,8 @@
 
 | Domain | Purpose |
 |--------|---------|
-| `knrog.online` | Web UI (static files) |
-| `app.knrog.online` | Subdomain tunneling |
+| `app.knrog.online` | Web UI (static files) |
+| `*.app.knrog.online` | Subdomain tunneling |
 | `api.knrog.online` | API server |
 
 ## DNS Configuration
@@ -13,11 +13,11 @@
 Setup these DNS records:
 
 ```
-Type   Name    Value              TTL
-A      @       YOUR_VPS_IP        300
-A      *       YOUR_VPS_IP        300
-A      api     YOUR_VPS_IP        300
-A      app     YOUR_VPS_IP        300
+Type   Name      Value              TTL
+A      @         YOUR_VPS_IP        300
+A      api       YOUR_VPS_IP        300
+A      app       YOUR_VPS_IP        300
+A      *.app     YOUR_VPS_IP        300
 ```
 
 ## Nginx Configuration
@@ -28,17 +28,28 @@ A      app     YOUR_VPS_IP        300
 # HTTP to HTTPS redirect
 server {
     listen 80;
-    server_name knrog.online api.knrog.online *.knrog.online;
+    server_name knrog.online api.knrog.online app.knrog.online *.app.knrog.online;
     return 301 https://$host$request_uri;
 }
 
-# Web UI (static files)
+# Root domain redirect to app
 server {
     listen 443 ssl;
     server_name knrog.online;
 
     ssl_certificate /etc/letsencrypt/live/knrog.online/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/knrog.online/privkey.pem;
+
+    return 301 https://app.knrog.online$request_uri;
+}
+
+# Web UI (static files)
+server {
+    listen 443 ssl;
+    server_name app.knrog.online;
+
+    ssl_certificate /etc/letsencrypt/live/app.knrog.online/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app.knrog.online/privkey.pem;
 
     root /var/www/knrog-web;
     index index.html;
@@ -68,13 +79,13 @@ server {
     }
 }
 
-# Tunnel Endpoints (subdomain tunneling via app.knrog.online)
+# Tunnel Endpoints (subdomain.app.knrog.online)
 server {
     listen 443 ssl;
-    server_name *.knrog.online;
+    server_name *.app.knrog.online;
 
-    ssl_certificate /etc/letsencrypt/live/knrog.online/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/knrog.online/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/app.knrog.online/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app.knrog.online/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:9000;
@@ -97,8 +108,11 @@ sudo systemctl reload nginx
 ## SSL Setup with Certbot
 
 ```bash
-sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d knrog.online -d *.knrog.online -d api.knrog.online
+# For knrog.online and api.knrog.online
+sudo certbot certonly --dns-cloudflare --dns-cloudflare-credentials /home/march/.secrets/cf.ini -d knrog.online -d "*.knrog.online"
+
+# For app.knrog.online and *.app.knrog.online (tunnel subdomains)
+sudo certbot certonly --dns-cloudflare --dns-cloudflare-credentials /home/march/.secrets/cf.ini -d app.knrog.online -d "*.app.knrog.online"
 ```
 
 ## Deploy Backend (API Server)

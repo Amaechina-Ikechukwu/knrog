@@ -15,6 +15,7 @@ import {
   Select,
   MenuItem,
 } from '@mui/material';
+import { useSearchParams } from 'react-router-dom';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import LockIcon from '@mui/icons-material/Lock';
 import DashboardLayout from '../components/DashboardLayout';
@@ -34,28 +35,52 @@ interface LogEntry {
 
 export default function LogsPage() {
   const { user, domains, fetchDomains } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDomain, setSelectedDomain] = useState<string>('all');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalLogs, setTotalLogs] = useState(0);
+  const limit = 25;
+  
+  // Initialize from URL query param or default to 'all'
+  const urlSubdomain = searchParams.get('subdomain');
+  const [selectedDomain, setSelectedDomain] = useState<string>(urlSubdomain || 'all');
 
   // Check if user has paid-tier access
   const SPECIAL_EMAILS = ["amaechinaikechukwu6@gmail.com"];
   const hasPaidAccess = user?.isPaid || (user?.email && SPECIAL_EMAILS.includes(user.email));
 
-  const fetchLogs = async () => {
+  const handleDomainChange = (value: string) => {
+    setSelectedDomain(value);
+    setPage(1); // Reset to first page on domain change
+    // Update URL to reflect selection
+    if (value === 'all') {
+      setSearchParams({});
+    } else {
+      setSearchParams({ subdomain: value });
+    }
+  };
+
+  const fetchLogs = async (pageNum = page) => {
     const token = localStorage.getItem('token');
     if (!token) return;
 
     setLoading(true);
     try {
-      const params = selectedDomain !== 'all' ? `?subdomain=${selectedDomain}` : '';
-      const response = await fetch(`${API_URL}/api/domains/logs${params}`, {
+      const params = new URLSearchParams({ page: pageNum.toString(), limit: limit.toString() });
+      if (selectedDomain !== 'all') {
+        params.set('subdomain', selectedDomain);
+      }
+      const response = await fetch(`${API_URL}/api/domains/logs?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       if (response.ok) {
         const data = await response.json();
         setLogs(data.logs || []);
+        setTotalPages(data.totalPages || 1);
+        setTotalLogs(data.totalLogs || 0);
       }
     } catch (error) {
       console.error('Failed to fetch logs:', error);
@@ -68,13 +93,21 @@ export default function LogsPage() {
     fetchDomains();
   }, []);
 
+  // Update selectedDomain when URL changes
+  useEffect(() => {
+    const urlSubdomain = searchParams.get('subdomain');
+    if (urlSubdomain && urlSubdomain !== selectedDomain) {
+      setSelectedDomain(urlSubdomain);
+    }
+  }, [searchParams]);
+
   useEffect(() => {
     if (hasPaidAccess) {
-      fetchLogs();
+      fetchLogs(page);
     } else {
       setLoading(false);
     }
-  }, [hasPaidAccess, selectedDomain]);
+  }, [hasPaidAccess, selectedDomain, page]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('en-US', {
@@ -164,7 +197,7 @@ export default function LogsPage() {
             <FormControl size="small" sx={{ minWidth: 150 }}>
               <Select
                 value={selectedDomain}
-                onChange={(e) => setSelectedDomain(e.target.value)}
+                onChange={(e) => handleDomainChange(e.target.value)}
                 sx={{
                   fontSize: '0.75rem',
                   color: '#e0e0e0',
@@ -304,6 +337,44 @@ export default function LogsPage() {
                 </TableBody>
               </Table>
             </TableContainer>
+            
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  p: 2,
+                  borderTop: '1px solid rgba(255,255,255,0.06)',
+                }}
+              >
+                <Typography sx={{ fontSize: '0.7rem', color: '#666' }}>
+                  Showing {((page - 1) * limit) + 1}-{Math.min(page * limit, totalLogs)} of {totalLogs}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    size="small"
+                    disabled={page <= 1}
+                    onClick={() => setPage(p => p - 1)}
+                    sx={{ fontSize: '0.7rem', color: '#888', minWidth: 'auto', px: 1.5 }}
+                  >
+                    ← Prev
+                  </Button>
+                  <Typography sx={{ fontSize: '0.7rem', color: '#666', alignSelf: 'center' }}>
+                    {page} / {totalPages}
+                  </Typography>
+                  <Button
+                    size="small"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage(p => p + 1)}
+                    sx={{ fontSize: '0.7rem', color: '#888', minWidth: 'auto', px: 1.5 }}
+                  >
+                    Next →
+                  </Button>
+                </Box>
+              </Box>
+            )}
           </Box>
         )}
       </Box>

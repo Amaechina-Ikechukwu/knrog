@@ -30,9 +30,12 @@ export const handleIncomingRequest = (
   res: ServerResponse
 ) => {
   const host = req.headers.host || "";
-  // Extract 'meat' from 'meat.knrog.com'
-  const subdomain = host.split(".")[0] || "";
-  console.log(`[Gateway] Incoming ${req.method} ${req.url} for subdomain: ${subdomain}`);
+  // Extract subdomain from formats like:
+  // - 'subdomain.knrog.online' -> 'subdomain'
+  // - 'subdomain.app.knrog.online' -> 'subdomain'
+  const parts = host.split(".");
+  const subdomain = parts[0] || "";
+  console.log(`[Gateway] Incoming ${req.method} ${req.url} for subdomain: ${subdomain} (host: ${host})`);
 
   const socket = getTunnelSocket(subdomain);
 

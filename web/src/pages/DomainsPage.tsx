@@ -124,6 +124,7 @@ export default function DomainsPage() {
                       <TableCell>Subdomain</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Created</TableCell>
+                      {hasPaidAccess && <TableCell sx={{ width: 60 }}>Logs</TableCell>}
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -132,7 +133,9 @@ export default function DomainsPage() {
                         key={domain.subdomain}
                         sx={{
                           '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' },
+                          cursor: hasPaidAccess ? 'pointer' : 'default',
                         }}
+                        onClick={() => hasPaidAccess && navigate(`/logs?subdomain=${domain.subdomain}`)}
                       >
                         <TableCell>
                           <Typography
@@ -170,6 +173,25 @@ export default function DomainsPage() {
                             {formatDate(domain.createdAt)}
                           </Typography>
                         </TableCell>
+                        {hasPaidAccess && (
+                          <TableCell>
+                            <Button
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/logs?subdomain=${domain.subdomain}`);
+                              }}
+                              sx={{ 
+                                color: '#50e3c2', 
+                                fontSize: '0.65rem',
+                                minWidth: 'auto',
+                                p: 0.5,
+                              }}
+                            >
+                              View
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
