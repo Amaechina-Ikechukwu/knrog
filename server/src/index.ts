@@ -108,11 +108,20 @@ wss.on("connection", async (ws, req) => {
     return;
   }
 
+  // Enforce Connection Limit FIRST (before creating subdomain)
+  const activeConnections = getConnectionCount(user.id);
+  const LIMIT = user.isPaid ? Infinity : 5;
+
+  if (activeConnections >= LIMIT) {
+    ws.close(1008, "Connection limit reached. Upgrade for more.");
+    return;
+  }
+
   // Check if user can reuse subdomains (paid users or special email)
   const SPECIAL_EMAILS = ["amaechinaikechukwu6@gmail.com"];
   const canReuseSubdomain = user.isPaid || SPECIAL_EMAILS.includes(user.email);
 
-  // Determine Subdomain
+  // Determine Subdomain (only after connection limit check passes)
   let subdomain = requestedSubdomain;
   
   if (subdomain) {
@@ -151,13 +160,6 @@ wss.on("connection", async (ws, req) => {
     }
     await db.insert(domains).values({ subdomain, userId: user.id });
   }
-
-  // Enforce Connection Limit
-  const activeConnections = getConnectionCount(user.id);
-  const LIMIT = user.isPaid ? Infinity : 5;
-
-  if (activeConnections >= LIMIT) {
-    ws.close(1008, "Connection limit reached. Upgrade for more.");
     return;
   }
   
