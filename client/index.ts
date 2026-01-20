@@ -34,10 +34,12 @@ program
     // Get or create API key
     const apiKey = await getOrCreateApiKey(serverUrl, options.apiKey, config.apiKey);
     
-    // Save API key to config
-    config.apiKey = apiKey;
-    saveConfig(config);
-    console.log("[Knrog] API Key saved to ~/.knrog/config.json");
+    // Save API key to config if it's new or changed
+    if (config.apiKey !== apiKey) {
+      config.apiKey = apiKey;
+      saveConfig(config);
+      console.log("[Knrog] API Key saved to ~/.knrog/config.json");
+    }
 
     // Start tunnel
     startTunnel(localPort, serverUrl, apiKey, subdomain, config);

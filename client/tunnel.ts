@@ -22,7 +22,7 @@ export function startTunnel(
   const pendingRequests = new Map<string, http.ClientRequest>();
 
   ws.on("open", () => {
-    console.log("[Knrog] ✓ Connected to server!");
+    // Connection established, waiting for init message with subdomain
   });
 
   ws.on("message", (data) => {
@@ -33,15 +33,19 @@ export function startTunnel(
       config.lastSubdomain = message.subdomain;
       saveConfig(config);
       
-      console.log(`\n┌─────────────────────────────────────────┐`);
-      console.log(`│  🌐 Your tunnel is live!               │`);
-      console.log(`│                                         │`);
-      console.log(
-        `│  ${message.subdomain}.${process.env.DOMAIN_CONNECTION || "knrog.online"}              │`
-      );
-      console.log(`│                                         │`);
-      console.log(`│  → localhost:${localPort.toString().padEnd(27)}│`);
-      console.log(`└─────────────────────────────────────────┘\n`);
+      const domain = process.env.DOMAIN_CONNECTION || "knrog.online";
+      const fullUrl = `https://${message.subdomain}.${domain}`;
+      
+      console.log(`[Knrog] ✓ Connected to server!`);
+      console.log(``);
+      console.log(`┌${"".padEnd(fullUrl.length + 6, "─")}┐`);
+      console.log(`│  🌐 Your tunnel is live!${"".padEnd(fullUrl.length - 19, " ")}│`);
+      console.log(`│${"".padEnd(fullUrl.length + 6, " ")}│`);
+      console.log(`│  ${fullUrl}  │`);
+      console.log(`│${"".padEnd(fullUrl.length + 6, " ")}│`);
+      console.log(`│  → localhost:${localPort}${"".padEnd(fullUrl.length - 9 - localPort.toString().length, " ")}│`);
+      console.log(`└${"".padEnd(fullUrl.length + 6, "─")}┘`);
+      console.log(``);
     }
 
     if (message.type === "request") {

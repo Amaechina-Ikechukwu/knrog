@@ -250,6 +250,30 @@ router.get("/me", authMiddleware, async (req: any, res) => {
   }
 });
 
+// POST /api/auth/validate - Validate an API key
+router.post("/validate", async (req, res) => {
+  try {
+    const apiKey = req.headers["x-api-key"] as string;
+    
+    if (!apiKey) {
+      return res.status(401).json({ valid: false, error: "API key required" });
+    }
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.apiKey, apiKey),
+    });
+
+    if (!user) {
+      return res.status(401).json({ valid: false, error: "Invalid API key" });
+    }
+
+    res.json({ valid: true, email: user.email });
+  } catch (error) {
+    console.error("API key validation error:", error);
+    res.status(500).json({ valid: false, error: "Internal server error" });
+  }
+});
+
 // POST /api/auth/cli-session - Create a CLI session for auto-token flow
 router.post("/cli-session", async (req, res) => {
   const sessionId = uuidv4();

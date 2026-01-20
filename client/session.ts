@@ -14,6 +14,8 @@ export async function createCliSession(serverUrl: string): Promise<string | null
       const data = await response.json() as { sessionId: string };
       console.log("[Knrog] ✓ CLI session created");
       return data.sessionId;
+    } else if (response.status === 429) {
+      console.error("[Knrog] Rate limited. Please wait a few minutes and try again.");
     } else {
       console.error(`[Knrog] Server responded with status ${response.status}`);
     }
@@ -29,8 +31,7 @@ export async function waitForCliSession(serverUrl: string, sessionId: string): P
   const maxAttempts = 60; // 5 minutes (60 * 5 seconds)
   let attempts = 0;
 
-  console.log("[Knrog] Waiting for registration and verification to complete...");
-  console.log("[Knrog] (This may take a few minutes if you need to verify your email)");
+  console.log("[Knrog] Waiting for registration to complete...");
 
   while (attempts < maxAttempts) {
     try {
@@ -44,17 +45,17 @@ export async function waitForCliSession(serverUrl: string, sessionId: string): P
         }
       }
       
-      // Wait 5 seconds before next poll
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      // Wait 2 seconds before next poll (faster since no email verification)
+      await new Promise(resolve => setTimeout(resolve, 2000));
       attempts++;
       
-      // Show progress dots every 15 seconds
+      // Show progress dots every 6 seconds
       if (attempts % 3 === 0) {
         process.stdout.write(".");
       }
     } catch (error) {
       // Network error, continue polling
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
       attempts++;
     }
   }
@@ -78,7 +79,7 @@ export async function handleCliRegistration(serverUrl: string): Promise<string |
   if (serverUrl.includes("localhost") || serverUrl.includes("127.0.0.1")) {
     frontendUrl = "http://localhost:5173";
   } else if (serverUrl.includes("api.knrog.online")) {
-    frontendUrl = "https://app.knrog.online";
+    frontendUrl = "https://knrog.online";
   } else {
     frontendUrl = serverUrl.replace("wss://", "https://").replace("ws://", "http://");
   }
@@ -99,12 +100,35 @@ export async function handleCliRegistration(serverUrl: string): Promise<string |
   return null;
 }
 
+async function validateApiKey(serverUrl: string, apiKey: string): Promise<boolean> {
+  try {
+    const apiUrl = serverUrl.replace("wss://", "https://").replace("ws://", "http://");
+    const response = await fetch(`${apiUrl}/api/auth/validate`, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "x-api-key": apiKey
+      },
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function getOrCreateApiKey(serverUrl: string, providedApiKey?: string, configApiKey?: string): Promise<string> {
   // Use provided API key or load from config
   let apiKey = providedApiKey || configApiKey;
   
   if (apiKey) {
-    return apiKey;
+    // Validate the API key before using it
+    console.log("[Knrog] Validating API key...");
+    const isValid = await validateApiKey(serverUrl, apiKey);
+    if (isValid) {
+      console.log("[Knrog] ✓ API key is valid");
+      return apiKey;
+    }
+    console.log("[Knrog] API key is invalid or expired. Starting registration...");
   }
 
   // Try automatic CLI registration flow

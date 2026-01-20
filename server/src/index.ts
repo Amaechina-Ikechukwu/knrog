@@ -38,7 +38,16 @@ app.use(express.json());
 // Rate Limiting
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // 20 attempts per 15 min
+  max: 50, // 50 attempts per 15 min
+  message: { error: 'Too many attempts. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Separate, more lenient limiter for CLI session endpoints
+const cliSessionLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 100, // 100 attempts per 5 min (polling)
   message: { error: 'Too many attempts. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -49,7 +58,11 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Auth Routes
+// CLI Session Routes (more lenient rate limit for polling)
+app.use('/api/auth/cli-session', cliSessionLimiter);
+app.use('/api/auth/validate', cliSessionLimiter);
+
+// Auth Routes (stricter rate limit for login/register)
 app.use('/api/auth', authLimiter, authRouter);
 
 // Domains Routes
