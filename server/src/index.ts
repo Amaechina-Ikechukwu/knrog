@@ -7,11 +7,13 @@ import { handleIncomingRequest, handleTunnelMessage } from "./router";
 import { isSubdomainTaken, registerTunnel, removeTunnel, getConnectionCount } from "./registry";
 import { getRandomName } from "./utils/randomnames";
 import { db } from "./db";
-import { users, domains } from "./db/schema";
+import { users, domains, PLAN_LIMITS } from "./db/schema";
 import { eq } from "drizzle-orm";
 import { parse } from "url";
 import authRouter from "./api/auth";
 import domainsRouter from "./api/domains";
+import billingRouter from "./api/billing";
+import { getUserPlan, trackUsage, checkUserLimits } from "./api/billing";
 
 const PORT = Number(process.env.SERVER_PORT || 3000);
 const DOMAIN = process.env.DOMAIN_CONNECTION || "localhost:3000";
@@ -68,6 +70,9 @@ app.use('/api/auth', authLimiter, authRouter);
 // Domains Routes
 app.use('/api/domains', domainsRouter);
 
+// Billing Routes
+app.use('/api/billing', billingRouter);
+
 // Create HTTP server from Express
 const server = app.listen(PORT, () => {
   console.log(`Knrog Server running on port ${PORT}`);
@@ -108,18 +113,28 @@ wss.on("connection", async (ws, req) => {
     return;
   }
 
+  // Get user's subscription plan
+  const { plan } = await getUserPlan(user.id);
+  const planLimits = PLAN_LIMITS[plan];
+
   // Enforce Connection Limit FIRST (before creating subdomain)
   const activeConnections = getConnectionCount(user.id);
-  const CONNECTION_LIMIT = user.isPaid ? Infinity : 5;
+  const CONNECTION_LIMIT = planLimits.connections;
 
   if (activeConnections >= CONNECTION_LIMIT) {
-    ws.close(1008, "Connection limit reached. Upgrade for more.");
+    ws.close(1008, `Connection limit reached (${CONNECTION_LIMIT}). Upgrade for more.`);
+    return;
+  }
+
+  // Check bandwidth limits
+  const { withinLimits, reason } = await checkUserLimits(user.id);
+  if (!withinLimits) {
+    ws.close(1008, reason || "Usage limit exceeded");
     return;
   }
 
   // Check if user has paid-tier access
-  const SPECIAL_EMAILS = ["amaechinaikechukwu6@gmail.com"];
-  const hasPaidAccess = user.isPaid || SPECIAL_EMAILS.includes(user.email);
+  const hasPaidAccess = plan !== "free" || user.isPaid;
 
   // Get user's existing domains (ordered by creation date, oldest first)
   const userDomains = await db.query.domains.findMany({
@@ -133,9 +148,9 @@ wss.on("connection", async (ws, req) => {
   if (subdomain) {
     // User is requesting a specific subdomain
     if (!hasPaidAccess) {
-      // Free users can only reuse their FIRST domain
-      if (userDomains.length > 0 && subdomain !== userDomains[0]!.subdomain) {
-        ws.close(1008, "Free tier: You can only use your first domain. Upgrade for more.");
+      // Free users can only reuse domains within their limit
+      if (userDomains.length >= planLimits.domains && !userDomains.find(d => d.subdomain === subdomain)) {
+        ws.close(1008, `Domain limit reached (${planLimits.domains}). Upgrade for more.`);
         return;
       }
     }
@@ -155,8 +170,8 @@ wss.on("connection", async (ws, req) => {
       }
     } else {
       // Creating a new domain
-      if (!hasPaidAccess && userDomains.length >= 1) {
-        ws.close(1008, "Free tier: Domain limit reached (1/1). Upgrade for unlimited domains.");
+      if (userDomains.length >= planLimits.domains) {
+        ws.close(1008, `Domain limit reached (${userDomains.length}/${planLimits.domains}). Upgrade for more.`);
         return;
       }
       try {
@@ -168,12 +183,12 @@ wss.on("connection", async (ws, req) => {
     }
   } else {
     // Generating a new random subdomain
-    // Free users: can only have 1 domain, so check limit first
-    if (!hasPaidAccess && userDomains.length >= 1) {
-      // Free users with existing domain should reuse it
+    // Check domain limit first
+    if (userDomains.length >= planLimits.domains) {
+      // Users at domain limit should reuse their first domain
       subdomain = userDomains[0]!.subdomain;
       if (isSubdomainTaken(subdomain)) {
-        ws.close(1008, "Your domain is currently active in another session. Free tier allows 1 domain.");
+        ws.close(1008, `Your domain is currently active in another session. Limit: ${planLimits.domains} domain(s).`);
         return;
       }
     } else {

@@ -9,10 +9,12 @@ import {
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
+import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 interface DomainStats {
   domainCount: number;
@@ -20,6 +22,7 @@ interface DomainStats {
 }
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const { user, updateUser } = useAuth();
   const [generatingKey, setGeneratingKey] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -142,6 +145,44 @@ export default function DashboardPage() {
             </Box>
           </Box>
         </Box>
+
+        {/* Upgrade Banner for Free Users */}
+        {!user?.isPaid && (
+          <Box
+            sx={{
+              p: 2.5,
+              mb: 2,
+              borderRadius: 1,
+              border: '1px solid rgba(120, 119, 198, 0.3)',
+              background: 'linear-gradient(135deg, rgba(120, 119, 198, 0.1) 0%, rgba(80, 227, 194, 0.05) 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 2,
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <RocketLaunchIcon sx={{ color: '#7877c6', fontSize: 20 }} />
+              <Box>
+                <Typography sx={{ color: '#e0e0e0', fontSize: '0.85rem', fontWeight: 500 }}>
+                  Upgrade to Pro
+                </Typography>
+                <Typography sx={{ color: '#888', fontSize: '0.75rem' }}>
+                  Get more domains, bandwidth, and request logs
+                </Typography>
+              </Box>
+            </Box>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={() => navigate('/pricing')}
+              sx={{ px: 3 }}
+            >
+              View Plans
+            </Button>
+          </Box>
+        )}
 
         {/* Domain Stats */}
         <Box

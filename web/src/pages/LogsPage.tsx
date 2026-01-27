@@ -48,8 +48,7 @@ export default function LogsPage() {
   const [selectedDomain, setSelectedDomain] = useState<string>(urlSubdomain || 'all');
 
   // Check if user has paid-tier access
-  const SPECIAL_EMAILS = ["amaechinaikechukwu6@gmail.com"];
-  const hasPaidAccess = user?.isPaid || (user?.email && SPECIAL_EMAILS.includes(user.email));
+  const hasPaidAccess = user?.isPaid;
 
   const handleDomainChange = (value: string) => {
     setSelectedDomain(value);
@@ -220,7 +219,7 @@ export default function LogsPage() {
             <Button
               size="small"
               startIcon={<RefreshIcon sx={{ fontSize: 12 }} />}
-              onClick={fetchLogs}
+              onClick={() => fetchLogs()}
               sx={{ color: '#666', fontSize: '0.7rem' }}
             >
               Refresh

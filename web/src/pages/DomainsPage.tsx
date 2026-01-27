@@ -24,8 +24,7 @@ export default function DomainsPage() {
   const { user, domains, loading, fetchDomains } = useAuth();
   
   // Check if user has paid-tier access
-  const SPECIAL_EMAILS = ["amaechinaikechukwu6@gmail.com"];
-  const hasPaidAccess = user?.isPaid || (user?.email && SPECIAL_EMAILS.includes(user.email));
+  const hasPaidAccess = user?.isPaid;
 
   useEffect(() => {
     fetchDomains();

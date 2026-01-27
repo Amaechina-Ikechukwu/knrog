@@ -10,7 +10,25 @@ const program = new Command();
 program
   .name("knrog")
   .description("Expose your local server to the internet")
-  .argument("<port>", "Local port to expose")
+  .version("1.0.0");
+
+program
+  .command("logout")
+  .description("Log out and clear stored credentials")
+  .action(() => {
+    const config = loadConfig();
+    if (config.apiKey) {
+      delete config.apiKey;
+      saveConfig(config);
+      console.log("✅ Successfully logged out. API key removed.");
+    } else {
+      console.log("ℹ️  You are not currently logged in.");
+    }
+  });
+
+// Main tunnel command (default)
+program
+  .argument("[port]", "Local port to expose")
   .option(
     "-s, --server <url>",
     "Knrog server URL",
@@ -19,7 +37,13 @@ program
   .option("-k, --api-key <key>", "API Key for authentication")
   .option("-d, --subdomain <name>", "Request a specific subdomain (paid users only)")
   .option("-r, --reuse", "Reuse your last subdomain (paid users only)")
-  .action(async (port: string, options) => {
+  .action(async (port, options) => {
+    // If no port is provided (and it's not the logout command which is already handled), show help
+    if (!port) {
+      program.help();
+      return;
+    }
+
     const localPort = parseInt(port);
     const serverUrl = options.server;
 

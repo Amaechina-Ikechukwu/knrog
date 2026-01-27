@@ -1,18 +1,21 @@
 import { Router } from "express";
 import { db } from "../db";
-import { domains, users, domainLogs } from "../db/schema";
+import { domains, users, domainLogs, PLAN_LIMITS } from "../db/schema";
 import { eq, desc, asc, and } from "drizzle-orm";
 import { authMiddleware } from "./auth";
 import { isSubdomainTaken } from "../registry";
+import { getUserPlan } from "./billing";
 
 const router = Router();
 
-// Special emails that get paid features without isPaid flag
-const SPECIAL_EMAILS = ["amaechinaikechukwu6@gmail.com"];
-
-// Helper to check if user has paid-tier access
-const hasPaidAccess = (user: { isPaid: boolean; email: string }) => {
-  return user.isPaid || SPECIAL_EMAILS.includes(user.email);
+// Helper to check if user has paid-tier access (uses subscription OR legacy isPaid flag)
+const hasPaidAccess = async (userId: string, user: { isPaid: boolean; email: string }) => {
+  // Check subscription first
+  const { plan } = await getUserPlan(userId);
+  if (plan !== "free") return true;
+  
+  // Fallback to legacy isPaid flag
+  return user.isPaid;
 };
 
 // GET /api/domains - Get domains for the authenticated user
@@ -34,7 +37,7 @@ router.get("/", authMiddleware, async (req: any, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const isPaid = hasPaidAccess(user);
+    const isPaid = await hasPaidAccess(userId, user);
 
     // Get all user domains ordered by creation date (oldest first)
     const userDomains = await db.query.domains.findMany({
@@ -86,7 +89,7 @@ router.get("/stats", authMiddleware, async (req: any, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const isPaid = hasPaidAccess(user);
+    const isPaid = await hasPaidAccess(userId, user);
 
     const userDomains = await db.query.domains.findMany({
       where: eq(domains.userId, userId),
@@ -133,7 +136,7 @@ router.get("/logs", authMiddleware, async (req: any, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    if (!hasPaidAccess(user)) {
+    if (!(await hasPaidAccess(userId, user))) {
       return res.status(403).json({ 
         error: "Logs are a paid feature. Upgrade to access request history.",
         isPaid: false,

@@ -9,6 +9,8 @@ import DashboardPage from './pages/DashboardPage';
 import DomainsPage from './pages/DomainsPage';
 import LogsPage from './pages/LogsPage';
 import VerifyPage from './pages/VerifyPage';
+import PricingPage from './pages/PricingPage';
+import BillingPage from './pages/BillingPage';
 
 function App() {
   return (
@@ -24,6 +26,9 @@ function App() {
             <Route path="/domains" element={<DomainsPage />} />
             <Route path="/logs" element={<LogsPage />} />
             <Route path="/verify" element={<VerifyPage />} />
+            <Route path="/pricing" element={<PricingPage />} />
+            <Route path="/billing" element={<BillingPage />} />
+            <Route path="/billing/callback" element={<BillingPage />} />
           </Routes>
         </AuthProvider>
       </BrowserRouter>
@@ -32,4 +37,3 @@ function App() {
 }
 
 export default App;
-

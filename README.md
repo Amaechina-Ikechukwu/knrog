@@ -2,14 +2,17 @@
 
 To install dependencies:
 
-```bash
+bash
 bun install
-```
 
 To run:
 
-```bash
+bash
 bun run index.ts
-```
 
 This project was created using `bun init` in bun v1.3.4. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+
+
+PROJECT INFO:
+Project: knrog
+Description: N/A

@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import DnsIcon from '@mui/icons-material/Dns';
 import HistoryIcon from '@mui/icons-material/History';
+import PaymentIcon from '@mui/icons-material/Payment';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useAuth } from '../context/AuthContext';
 
@@ -19,6 +20,7 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard', icon: <DashboardIcon sx={{ fontSize: 14 }} /> },
   { label: 'Domains', path: '/domains', icon: <DnsIcon sx={{ fontSize: 14 }} /> },
   { label: 'Logs', path: '/logs', icon: <HistoryIcon sx={{ fontSize: 14 }} /> },
+  { label: 'Billing', path: '/billing', icon: <PaymentIcon sx={{ fontSize: 14 }} /> },
 ];
 
 interface DashboardLayoutProps {
@@ -115,7 +117,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           <Typography
             variant="body2"
             sx={{
-              color: '#666',
+              color: '#888',
               fontSize: '0.65rem',
               mb: 1,
               px: 0.5,
@@ -134,12 +136,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             sx={{
               justifyContent: 'flex-start',
               px: 1.5,
-              py: 0.5,
-              color: '#666',
-              fontSize: '0.7rem',
+              py: 0.75,
+              color: '#aaa',
+              fontSize: '0.75rem',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 1,
               '&:hover': {
-                bgcolor: 'rgba(255,255,255,0.04)',
-                color: '#888',
+                bgcolor: 'rgba(255,255,255,0.06)',
+                color: '#e0e0e0',
+                borderColor: 'rgba(255,255,255,0.15)',
               },
               '& .MuiButton-startIcon': {
                 marginRight: 0.75,
