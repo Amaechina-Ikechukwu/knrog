@@ -60,6 +60,38 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Root domain handler - redirect to frontend or show API info
+app.get('/', (req, res) => {
+  const host = req.headers.host || "";
+  
+  // If accessing api.knrog.online, show API info
+  if (host === API_DOMAIN) {
+    return res.json({
+      name: 'Knrog API',
+      version: '1.0.0',
+      status: 'running',
+      endpoints: {
+        auth: '/api/auth',
+        domains: '/api/domains',
+        billing: '/api/billing',
+        health: '/api/health'
+      }
+    });
+  }
+  
+  // For main domain, redirect to frontend
+  if (FRONTEND_URL && FRONTEND_URL !== 'http://localhost:5173') {
+    return res.redirect(FRONTEND_URL);
+  }
+  
+  // Fallback message
+  res.json({
+    message: 'Knrog Tunnel Service',
+    status: 'running',
+    api: `https://${API_DOMAIN}`
+  });
+});
+
 // CLI Session Routes (more lenient rate limit for polling)
 app.use('/api/auth/cli-session', cliSessionLimiter);
 app.use('/api/auth/validate', cliSessionLimiter);
