@@ -2,6 +2,7 @@ import { IncomingMessage, ServerResponse } from "http";
 import { getTunnelSocket, getTunnelUserId, getTunnelIsPaid, getTunnelSubdomain } from "./registry";
 import { v4 } from "uuid";
 import { logDomainRequest } from "./api/domains";
+import { isBlockedRequest, trackSuspiciousIP, getClientIP } from "./utils/security";
 
 type TunnelMessage =
   | { type: "request"; id: string; method?: string; url?: string; headers?: any }
@@ -29,6 +30,19 @@ export const handleIncomingRequest = (
   req: IncomingMessage,
   res: ServerResponse
 ) => {
+  // Security: Block malicious requests early
+  if (isBlockedRequest(req)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    return res.end('Forbidden');
+  }
+
+  // Track suspicious IPs
+  const clientIP = getClientIP(req);
+  if (trackSuspiciousIP(clientIP)) {
+    res.writeHead(429, { 'Content-Type': 'text/plain' });
+    return res.end('Too Many Requests');
+  }
+
   const host = req.headers.host || "";
   // Extract subdomain from formats like:
   // - 'subdomain.knrog.online' -> 'subdomain'

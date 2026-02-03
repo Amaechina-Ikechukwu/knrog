@@ -81,9 +81,18 @@ const server = app.listen(PORT, () => {
 // Handle subdomain-based tunnel requests
 app.use((req, res, next) => {
   const host = req.headers.host || "";
-  const isRoot = host === DOMAIN || host.startsWith("localhost");
   
-  if (!isRoot) {
+  // Check if this is a subdomain request (not the main domain)
+  // Main domains: knrog.online, app.knrog.online, api.knrog.online, localhost
+  const isMainDomain = 
+    host === 'knrog.online' ||
+    host === `www.${DOMAIN}` ||
+    host === DOMAIN || 
+    host === API_DOMAIN ||
+    host.startsWith("localhost");
+  
+  // Only handle tunnel requests for subdomains (not main domains)
+  if (!isMainDomain && (host.includes('.knrog.online') || host.includes('.'))) {
     handleIncomingRequest(req, res);
   } else {
     next();
