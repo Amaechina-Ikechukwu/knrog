@@ -3,6 +3,9 @@ WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install
 COPY . .
+
+# Set production environment for Vite build
+ENV NODE_ENV=production
 RUN bun run build
 
 FROM nginx:alpine
