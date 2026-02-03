@@ -24,6 +24,9 @@ const FRONTEND_URL_DEV = process.env.FRONTEND_URL_DEV || "http://localhost:5173"
 // Express App
 const app = express();
 
+// Trust proxy - required for express-rate-limit behind reverse proxy (Dokploy/Traefik)
+app.set('trust proxy', 1);
+
 // Security Middleware
 app.use(helmet({
   contentSecurityPolicy: false,
