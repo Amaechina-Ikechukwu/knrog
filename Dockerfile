@@ -12,7 +12,7 @@ RUN bun install
 COPY . .
 
 # Expose the application port (change if needed)
-EXPOSE 8080
+EXPOSE 3000
 
 # Start the application
 CMD ["sh", "-c", "bun run db:push && bun run server/src/index.ts"]

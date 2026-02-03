@@ -29,7 +29,7 @@ A     app            YOUR_SERVER_IP
    - **Branch**: main (or your branch)
    - **Build Type**: Dockerfile
    - **Dockerfile Path**: `./Dockerfile`
-   - **Port**: `8080`
+   - **Port**: `3000`
 
 4. **Domain Settings**:
    - Add domain: `api.knrog.online`
@@ -37,7 +37,7 @@ A     app            YOUR_SERVER_IP
 
 5. **Environment Variables**:
    ```env
-   SERVER_PORT=8080
+   SERVER_PORT=3000
    DOMAIN_CONNECTION=app.knrog.online
    API_DOMAIN=api.knrog.online
    DATABASE_URL=postgres://username:password@host:5432/knrog
