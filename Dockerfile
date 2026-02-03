@@ -15,4 +15,4 @@ COPY . .
 EXPOSE 3000
 
 # Start the application - db:push will fail gracefully if database isn't ready
-CMD ["sh", "-c", "bun run db:push && bun run server/src/index.ts"]
+CMD ["bun", "run", "server/src/index.ts"]

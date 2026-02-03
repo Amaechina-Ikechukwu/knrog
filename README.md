@@ -7,6 +7,7 @@ A fast, subdomain-based tunneling service.
 - **Subdomain Tunneling**: Automatic request routing for subdomains on `knrog.online`.
 - **Security Protection**: Built-in filtering for malicious paths, vulnerability scanners, and IP-based rate limiting for suspicious activity.
 - **Multi-Domain Architecture**: Segregated routing for landing page (`knrog.online`), app dashboard (`app.knrog.online`), and API (`api.knrog.online`).
+- **Automated Migrations**: Integrated database schema management that runs automatically on server startup.
 
 ## Architecture
 
