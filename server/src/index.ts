@@ -30,7 +30,7 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: [FRONTEND_URL, FRONTEND_URL_DEV, `https://${DOMAIN}`, `https://${API_DOMAIN}`, "http://localhost:5173"],
+  origin: [FRONTEND_URL, FRONTEND_URL_DEV, `https://${DOMAIN}`, `https://${API_DOMAIN}`, "http://localhost:5173", "https://knrog.online", "https://app.knrog.online"],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true,
 }));
@@ -65,7 +65,7 @@ app.get('/', (req, res) => {
   const host = req.headers.host || "";
   
   // If accessing api.knrog.online, show API info
-  if (host === API_DOMAIN) {
+  if (host === API_DOMAIN || host === 'api.knrog.online') {
     return res.json({
       name: 'Knrog API',
       version: '1.0.0',
@@ -79,16 +79,14 @@ app.get('/', (req, res) => {
     });
   }
   
-  // For main domain, redirect to frontend
-  if (FRONTEND_URL && FRONTEND_URL !== 'http://localhost:5173') {
-    return res.redirect(FRONTEND_URL);
-  }
-  
-  // Fallback message
+  // knrog.online should NOT redirect - it's served by the frontend deployment
+  // This is just a fallback that shouldn't be hit in production
   res.json({
     message: 'Knrog Tunnel Service',
     status: 'running',
-    api: `https://${API_DOMAIN}`
+    api: 'https://api.knrog.online',
+    app: 'https://app.knrog.online',
+    landing: 'https://knrog.online'
   });
 });
 
@@ -118,6 +116,8 @@ app.use((req, res, next) => {
   // Main domains: knrog.online, app.knrog.online, api.knrog.online, localhost
   const isMainDomain = 
     host === 'knrog.online' ||
+    host === 'app.knrog.online' ||
+    host === 'api.knrog.online' ||
     host === `www.${DOMAIN}` ||
     host === DOMAIN || 
     host === API_DOMAIN ||
