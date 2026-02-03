@@ -6,7 +6,8 @@
   "scripts": {
     "test-server": "bun run index.ts",
     "cli": "bun run client/index.ts",
-    "dev": "bun run server/src/index.ts"
+    "dev": "bun run server/src/index.ts",
+    "db:push": "drizzle-kit push"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
