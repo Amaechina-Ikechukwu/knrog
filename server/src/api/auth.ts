@@ -7,33 +7,23 @@ import { users } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
+import {
+  FRONTEND_URL,
+  JWT_SECRET,
+  REQUIRE_EMAIL_VERIFICATION,
+} from "../config";
+import {
+  completeCliSession,
+  consumeCliSession,
+  createCliSession,
+  getCliSession,
+} from "../state/cliSessions";
 
 const router = Router();
-
-const JWT_SECRET = process.env.JWT_SECRET || "your-super-secret-jwt-key-change-in-production";
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 const SENDER_EMAIL = process.env.SENDER_EMAIL || "onboarding@resend.dev";
 
 const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
-
-// CLI session storage for auto-token flow
-interface CliSession {
-  status: "pending" | "complete";
-  apiKey?: string;
-  createdAt: number;
-}
-const cliSessions = new Map<string, CliSession>();
-
-// Clean up expired sessions (older than 10 minutes)
-setInterval(() => {
-  const now = Date.now();
-  for (const [id, session] of cliSessions.entries()) {
-    if (now - session.createdAt > 10 * 60 * 1000) {
-      cliSessions.delete(id);
-    }
-  }
-}, 60 * 1000);
 
 // Validation schemas
 const registerSchema = z.object({
@@ -63,6 +53,24 @@ export const authMiddleware = (req: any, res: any, next: any) => {
   }
 };
 
+const sendVerificationEmail = async (email: string, token: string) => {
+  if (!resend) {
+    throw new Error("Email verification is enabled but RESEND_API_KEY is missing");
+  }
+
+  const verifyUrl = `${FRONTEND_URL}/verify?token=${token}`;
+  await resend.emails.send({
+    from: SENDER_EMAIL,
+    to: email,
+    subject: "Verify your Knrog email",
+    html: `
+      <p>Welcome to Knrog.</p>
+      <p>Please verify your email to activate your account:</p>
+      <p><a href="${verifyUrl}">${verifyUrl}</a></p>
+    `,
+  });
+};
+
 // POST /api/auth/register
 router.post("/register", async (req, res) => {
   try {
@@ -85,14 +93,17 @@ router.post("/register", async (req, res) => {
     
     // Generate API key for all users (including CLI)
     const apiKey = `knrog_${uuidv4().replace(/-/g, "")}`;
-    const isCli = cliSessionId && cliSessions.has(cliSessionId);
+    const cliSession = cliSessionId ? await getCliSession(cliSessionId) : null;
+    const isCli = Boolean(cliSession);
+    const verificationToken =
+      REQUIRE_EMAIL_VERIFICATION && !isCli ? uuidv4().replace(/-/g, "") : null;
 
-    // Create user (email verification disabled - all users are verified immediately)
+    // CLI-initiated signups stay frictionless, web signups verify in production by default.
     const [user] = await db.insert(users).values({
       email: validated.email,
       passwordHash,
-      verificationToken: null,
-      emailVerified: true,
+      verificationToken,
+      emailVerified: !verificationToken,
       apiKey,
     }).returning();
 
@@ -100,25 +111,33 @@ router.post("/register", async (req, res) => {
       return res.status(500).json({ error: "Failed to create user" });
     }
 
-    // If CLI session, complete it with the API key
+    if (verificationToken) {
+      await sendVerificationEmail(validated.email, verificationToken);
+    }
+
+    // If CLI session, complete it with the API key so the browser-assisted flow can finish.
     if (isCli) {
-      completeCliSession(cliSessionId, apiKey);
+      await completeCliSession(cliSessionId, apiKey);
       return res.status(201).json({
         message: "Account created successfully!",
         userId: user.id,
         apiKey,
+        emailVerified: user.emailVerified,
       });
     }
 
     // Return success for web registration
     res.status(201).json({
-      message: "Account created successfully!",
+      message: verificationToken
+        ? "Account created. Check your email to verify your account."
+        : "Account created successfully!",
       userId: user.id,
       apiKey,
+      emailVerified: user.emailVerified,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors[0].message });
+      return res.status(400).json({ error: error.issues[0]?.message || "Invalid request" });
     }
     console.error("Registration error:", error);
     res.status(500).json({ error: "Internal server error" });
@@ -137,6 +156,10 @@ router.post("/login", async (req, res) => {
 
     if (!user) {
       return res.status(401).json({ error: "Invalid email or password" });
+    }
+
+    if (REQUIRE_EMAIL_VERIFICATION && !user.emailVerified) {
+      return res.status(403).json({ error: "Please verify your email before signing in" });
     }
 
     const isValid = await bcrypt.compare(password, user.passwordHash);
@@ -162,7 +185,7 @@ router.post("/login", async (req, res) => {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: error.errors[0].message });
+      return res.status(400).json({ error: error.issues[0]?.message || "Invalid request" });
     }
     console.error("Login error:", error);
     res.status(500).json({ error: "Internal server error" });
@@ -223,6 +246,20 @@ router.post("/api-key", authMiddleware, async (req: any, res) => {
   }
 });
 
+// POST /api/auth/api-key/rotate (requires auth)
+router.post("/api-key/rotate", authMiddleware, async (req: any, res) => {
+  try {
+    const userId = req.user.userId;
+    const apiKey = `knrog_${uuidv4().replace(/-/g, "")}`;
+
+    await db.update(users).set({ apiKey }).where(eq(users.id, userId));
+    res.json({ apiKey });
+  } catch (error) {
+    console.error("API key rotation error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /api/auth/me (requires auth)
 router.get("/me", authMiddleware, async (req: any, res) => {
   try {
@@ -276,18 +313,14 @@ router.post("/validate", async (req, res) => {
 
 // POST /api/auth/cli-session - Create a CLI session for auto-token flow
 router.post("/cli-session", async (req, res) => {
-  const sessionId = uuidv4();
-  cliSessions.set(sessionId, {
-    status: "pending",
-    createdAt: Date.now(),
-  });
-  res.json({ sessionId });
+  const session = await createCliSession();
+  res.json({ sessionId: session.id });
 });
 
 // GET /api/auth/cli-session/:sessionId - Poll for session completion
 router.get("/cli-session/:sessionId", async (req, res) => {
   const { sessionId } = req.params;
-  const session = cliSessions.get(sessionId);
+  const session = await getCliSession(sessionId);
 
   if (!session) {
     return res.status(404).json({ error: "Session not found or expired" });
@@ -295,20 +328,11 @@ router.get("/cli-session/:sessionId", async (req, res) => {
 
   if (session.status === "complete") {
     // Delete session after returning (one-time use)
-    cliSessions.delete(sessionId);
-    return res.json({ status: "complete", apiKey: session.apiKey });
+    await consumeCliSession(sessionId);
+    return res.json({ status: "complete", apiKey: session.apiKey ?? null });
   }
 
   res.json({ status: "pending" });
 });
-
-// Export helper to complete CLI session (used by register endpoint)
-export const completeCliSession = (sessionId: string, apiKey: string) => {
-  const session = cliSessions.get(sessionId);
-  if (session) {
-    session.status = "complete";
-    session.apiKey = apiKey;
-  }
-};
 
 export default router;

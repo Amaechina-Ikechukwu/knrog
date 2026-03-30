@@ -14,7 +14,7 @@ import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 interface DomainStats {
   domainCount: number;
@@ -62,12 +62,33 @@ export default function DashboardPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const data = await response.json();
+      const data = await response.json() as { apiKey?: string };
       if (data.apiKey && user) {
         updateUser({ ...user, apiKey: data.apiKey });
       }
     } catch (error) {
       console.error('Failed to generate API key:', error);
+    } finally {
+      setGeneratingKey(false);
+    }
+  };
+
+  const rotateApiKey = async () => {
+    setGeneratingKey(true);
+    const token = localStorage.getItem('token');
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/api-key/rotate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await response.json() as { apiKey?: string };
+      if (data.apiKey && user) {
+        updateUser({ ...user, apiKey: data.apiKey });
+      }
+    } catch (error) {
+      console.error('Failed to rotate API key:', error);
     } finally {
       setGeneratingKey(false);
     }
@@ -265,6 +286,16 @@ export default function DashboardPage() {
                   <ContentCopyIcon sx={{ fontSize: 14 }} />
                 </IconButton>
               </Box>
+
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={rotateApiKey}
+                disabled={generatingKey}
+                sx={{ mb: 2 }}
+              >
+                {generatingKey ? 'Rotating...' : 'Rotate API Key'}
+              </Button>
 
               <Typography variant="body2" sx={{ color: '#555', mb: 1, fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Usage

@@ -14,7 +14,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useAuth } from '../context/AuthContext';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 export default function LoginPage() {
   const navigate = useNavigate();

@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, boolean, timestamp, integer, bigint } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, boolean, timestamp, integer, bigint, jsonb } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -15,6 +15,9 @@ export const users = pgTable("users", {
 export const domains = pgTable("domains", {
   subdomain: text("subdomain").primaryKey(),
   userId: uuid("user_id").references(() => users.id).notNull(),
+  accessToken: text("access_token"),
+  basicAuthUsername: text("basic_auth_username"),
+  basicAuthPasswordHash: text("basic_auth_password_hash"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastUsedAt: timestamp("last_used_at"),
 });
@@ -28,6 +31,13 @@ export const domainLogs = pgTable("domain_logs", {
   path: text("path").notNull(),
   statusCode: integer("status_code"),
   responseTime: integer("response_time"), // in milliseconds
+  bytesIn: integer("bytes_in").default(0).notNull(),
+  bytesOut: integer("bytes_out").default(0).notNull(),
+  errorMessage: text("error_message"),
+  requestHeaders: jsonb("request_headers"),
+  responseHeaders: jsonb("response_headers"),
+  requestBody: text("request_body"),
+  responseBody: text("response_body"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -66,6 +76,40 @@ export const payments = pgTable("payments", {
   flutterwaveRef: text("flutterwave_ref").unique(),
   flutterwaveTxId: text("flutterwave_tx_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Durable CLI sessions so browser-based auth survives restarts/multi-instance deployments.
+export const cliSessions = pgTable("cli_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  status: text("status").default("pending").notNull(), // 'pending' | 'complete'
+  apiKey: text("api_key"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
+// Shared tunnel presence data used for reconnects and cross-instance routing.
+export const activeTunnels = pgTable("active_tunnels", {
+  subdomain: text("subdomain").primaryKey(),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  instanceId: text("instance_id").notNull(),
+  instanceUrl: text("instance_url").notNull(),
+  connectionId: text("connection_id").notNull(),
+  status: text("status").default("active").notNull(), // 'active' | 'closing'
+  publicUrl: text("public_url").notNull(),
+  connectedAt: timestamp("connected_at").defaultNow().notNull(),
+  lastHeartbeatAt: timestamp("last_heartbeat_at").defaultNow().notNull(),
+});
+
+export const activeTcpTunnels = pgTable("active_tcp_tunnels", {
+  publicPort: integer("public_port").primaryKey(),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  instanceId: text("instance_id").notNull(),
+  instanceUrl: text("instance_url").notNull(),
+  connectionId: text("connection_id").notNull(),
+  publicHost: text("public_host").notNull(),
+  connectedAt: timestamp("connected_at").defaultNow().notNull(),
+  lastHeartbeatAt: timestamp("last_heartbeat_at").defaultNow().notNull(),
 });
 
 // Plan limits configuration

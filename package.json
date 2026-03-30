@@ -7,7 +7,11 @@
     "test-server": "bun run index.ts",
     "cli": "bun run client/index.ts",
     "dev": "bun run server/src/index.ts",
-    "db:push": "drizzle-kit push"
+    "dev:web": "cd web && bun run dev",
+    "typecheck:server": "tsc -p server/tsconfig.json",
+    "test:transport": "npm --prefix client run build && node scripts/integration-harness.mjs",
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",

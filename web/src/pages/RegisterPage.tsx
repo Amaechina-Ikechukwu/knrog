@@ -13,7 +13,7 @@ import {
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -27,6 +27,7 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [apiKey, setApiKey] = useState<string | null>(null);
+  const [requiresVerification, setRequiresVerification] = useState(false);
 
   // Show special message if registering from CLI
   useEffect(() => {
@@ -67,7 +68,11 @@ export default function RegisterPage() {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json() as {
+        error?: string;
+        apiKey?: string;
+        emailVerified?: boolean;
+      };
 
       if (!response.ok) {
         throw new Error(data.error || 'Registration failed');
@@ -77,6 +82,7 @@ export default function RegisterPage() {
       if (cliSessionId && data.apiKey) {
         setApiKey(data.apiKey);
       }
+      setRequiresVerification(data.emailVerified === false && !cliSessionId);
       
       setSuccess(true);
     } catch (err) {
@@ -273,14 +279,22 @@ export default function RegisterPage() {
               ) : (
                 <>
                   <Typography variant="h2" sx={{ mb: 2, color: '#EDEDED' }}>
-                    Check your email
+                    ✓ Account created!
                   </Typography>
                   <Typography variant="body1" sx={{ mb: 4 }}>
-                    We've sent a verification link to <strong>{email}</strong>
+                    {requiresVerification
+                      ? 'We sent you a verification link. Open it to activate your account, then come back here to sign in.'
+                      : 'Your account has been created successfully. You can now sign in.'}
                   </Typography>
-                  <Button variant="outlined" onClick={() => navigate('/login')}>
-                    Go to login
-                  </Button>
+                  {requiresVerification ? (
+                    <Button variant="outlined" onClick={() => navigate('/login')}>
+                      Back to login
+                    </Button>
+                  ) : (
+                    <Button variant="contained" onClick={() => navigate('/login')}>
+                      Sign in
+                    </Button>
+                  )}
                 </>
               )}
             </Box>

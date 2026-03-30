@@ -19,7 +19,7 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useAuth } from '../context/AuthContext';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 interface PlanFeature {
   name: string;
@@ -94,15 +94,50 @@ export default function PricingPage() {
 
       const data = await response.json();
 
-      if (data.paymentLink) {
-        window.location.href = data.paymentLink;
+      if (data.publicKey && data.txRef) {
+        // Use Flutterwave inline checkout SDK
+        const FlutterwaveCheckout = (window as any).FlutterwaveCheckout;
+        if (!FlutterwaveCheckout) {
+          console.error('Flutterwave SDK not loaded');
+          // Fallback: construct URL manually
+          window.location.href = `https://checkout.flutterwave.com/v3/hosted/pay?tx_ref=${data.txRef}&amount=${data.amount}&currency=${data.currency}&redirect_url=${encodeURIComponent(data.redirectUrl)}&customer[email]=${encodeURIComponent(data.customerEmail)}&public_key=${data.publicKey}`;
+          return;
+        }
+
+        FlutterwaveCheckout({
+          public_key: data.publicKey,
+          tx_ref: data.txRef,
+          amount: data.amount,
+          currency: data.currency,
+          payment_options: 'card,banktransfer,ussd',
+          redirect_url: data.redirectUrl,
+          customer: {
+            email: data.customerEmail,
+            name: data.customerName,
+          },
+          customizations: {
+            title: data.title,
+            description: data.description,
+            logo: '',
+          },
+          callback: (response: any) => {
+            // Payment completed, redirect to billing callback
+            window.location.href = `${data.redirectUrl}?tx_ref=${data.txRef}&status=${response.status}&transaction_id=${response.transaction_id}`;
+          },
+          onclose: () => {
+            setLoading(null);
+          },
+        });
       } else {
-        console.error('No payment link returned');
+        console.error('Invalid payment initialization response');
       }
     } catch (error) {
       console.error('Failed to initialize payment:', error);
     } finally {
-      setLoading(null);
+      // Only clear loading if checkout didn't open (SDK handles it via onclose)
+      if (!(window as any).FlutterwaveCheckout) {
+        setLoading(null);
+      }
     }
   };
 

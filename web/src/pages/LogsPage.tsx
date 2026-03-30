@@ -21,7 +21,7 @@ import LockIcon from '@mui/icons-material/Lock';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 interface LogEntry {
   id: string;

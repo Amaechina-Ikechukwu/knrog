@@ -4,7 +4,7 @@ import { Box, Container, Typography, CircularProgress, Alert, Button } from '@mu
 import CheckIcon from '@mui/icons-material/Check';
 import ErrorIcon from '@mui/icons-material/Error';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 export default function VerifyPage() {
   const [searchParams] = useSearchParams();

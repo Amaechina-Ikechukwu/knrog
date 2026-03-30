@@ -36,15 +36,23 @@ A     app            YOUR_SERVER_IP
    - Enable SSL (Let's Encrypt)
 
 5. **Environment Variables**:
-   ```env
-   SERVER_PORT=3000
-   DOMAIN_CONNECTION=app.knrog.online
-   API_DOMAIN=api.knrog.online
-   DATABASE_URL=postgres://username:password@host:5432/knrog
-   JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
-   RESEND_API_KEY=re_YOUR_RESEND_API_KEY
-   SENDER_EMAIL=onboarding@resend.dev
-   FRONTEND_URL=https://app.knrog.online
+    ```env
+    SERVER_PORT=3000
+    API_DOMAIN=api.knrog.online
+    TUNNEL_BASE_DOMAIN=knrog.online
+    TUNNEL_PROTOCOL=https
+    DATABASE_URL=postgres://username:password@host:5432/knrog
+    JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+    CLUSTER_SHARED_SECRET=shared-secret-for-internal-relay
+    INSTANCE_ADVERTISE_URL=https://api.knrog.online
+    TCP_TUNNEL_HOST=0.0.0.0
+    TCP_TUNNEL_PUBLIC_HOST=api.knrog.online
+    TCP_TUNNEL_PORT_START=7000
+    TCP_TUNNEL_PORT_END=7099
+    REQUIRE_EMAIL_VERIFICATION=true
+    RESEND_API_KEY=re_YOUR_RESEND_API_KEY
+    SENDER_EMAIL=onboarding@resend.dev
+    FRONTEND_URL=https://app.knrog.online
    FRONTEND_URL_DEV=http://localhost:5173
    LANDING_URL=https://knrog.online
    FLUTTERWAVE_PUBLIC_KEY=your-key
@@ -101,7 +109,8 @@ For `*.knrog.online` to work with SSL:
 
 1. In your DNS, ensure the `*` A record exists
 2. Dokploy should automatically handle Let's Encrypt wildcard certificates
-3. If not, you may need to configure Traefik manually or use Cloudflare proxy
+3. If you deploy multiple backend instances, make sure `INSTANCE_ADVERTISE_URL` resolves between them and that every instance shares the same `CLUSTER_SHARED_SECRET`
+4. If wildcard TLS is not provisioned automatically, configure Traefik manually or use Cloudflare proxy
 
 ### 6. Testing
 
@@ -137,6 +146,7 @@ app.get('*', (req, res) => {
 ## Troubleshooting
 
 - **502 Bad Gateway**: Check if services are running and ports match
-- **Tunnel not working**: Verify `DOMAIN_CONNECTION` environment variable
+- **Tunnel not working**: Verify `TUNNEL_BASE_DOMAIN`, wildcard DNS, and `INSTANCE_ADVERTISE_URL`
+- **TCP tunnel not working**: Verify the TCP port range is exposed at your host/firewall/load balancer
 - **CORS errors**: Check `FRONTEND_URL` matches your actual frontend domain
 - **Database connection failed**: Verify `DATABASE_URL` and database is running

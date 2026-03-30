@@ -1,11 +1,17 @@
 import { Router } from "express";
 import Flutterwave from "flutterwave-node-v3";
 import { db } from "../db";
-import { users, subscriptions, payments, usageLogs, PLAN_LIMITS, PlanType } from "../db/schema";
+import {
+  users,
+  subscriptions,
+  payments,
+  usageLogs,
+  PLAN_LIMITS,
+  type PlanType,
+} from "../db/schema";
 import { eq, and } from "drizzle-orm";
 import { authMiddleware } from "./auth";
 import { v4 as uuidv4 } from "uuid";
-import crypto from "crypto";
 
 const router = Router();
 
@@ -68,11 +74,15 @@ export const getUserUsage = async (userId: string) => {
     usage = newUsage;
   }
 
-  return usage;
+  return usage!;
 };
 
 // Helper to track usage
-export const trackUsage = async (userId: string, bytes: number) => {
+export const trackUsage = async (
+  userId: string,
+  bytes: number,
+  requestDelta = 1
+) => {
   const billingPeriod = getCurrentBillingPeriod();
   
   const existing = await db.query.usageLogs.findFirst({
@@ -85,7 +95,7 @@ export const trackUsage = async (userId: string, bytes: number) => {
   if (existing) {
     await db.update(usageLogs)
       .set({
-        requestCount: existing.requestCount + 1,
+        requestCount: existing.requestCount + requestDelta,
         bandwidthBytes: existing.bandwidthBytes + bytes,
         updatedAt: new Date(),
       })
@@ -94,7 +104,7 @@ export const trackUsage = async (userId: string, bytes: number) => {
     await db.insert(usageLogs).values({
       userId,
       billingPeriod,
-      requestCount: 1,
+      requestCount: requestDelta,
       bandwidthBytes: bytes,
     });
   }
@@ -169,17 +179,18 @@ router.post("/initialize", authMiddleware, async (req: any, res) => {
       },
     };
 
-    const response = await flw.Charge.card(payload);
-    
-    // For standard payment, use payment link
-    const paymentLink = `https://checkout.flutterwave.com/v3/hosted/pay/${txRef}`;
-    
-    // Alternative: Use Flutterwave Standard
+    // Return payment configuration for frontend inline checkout (Flutterwave Standard)
     res.json({
-      paymentLink: `https://checkout.flutterwave.com/v3/hosted/pay?tx_ref=${txRef}&amount=${amount}&currency=NGN&redirect_url=${encodeURIComponent(`${FRONTEND_URL}/billing/callback`)}&customer[email]=${encodeURIComponent(user.email)}&public_key=${FLW_PUBLIC_KEY}&customizations[title]=${encodeURIComponent("Knrog Subscription")}&customizations[description]=${encodeURIComponent(`${plan} Plan`)}&meta[userId]=${userId}&meta[plan]=${plan}`,
       txRef,
       amount,
+      currency: "NGN",
       plan,
+      publicKey: FLW_PUBLIC_KEY,
+      customerEmail: user.email,
+      customerName: user.email.split("@")[0],
+      redirectUrl: `${FRONTEND_URL}/billing/callback`,
+      title: "Knrog Subscription",
+      description: `${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan - Monthly`,
     });
   } catch (error) {
     console.error("Payment initialization error:", error);

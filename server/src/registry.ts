@@ -1,11 +1,20 @@
 import { WebSocket } from "ws";
 import { updateDomainLastUsed } from "./api/domains";
 
-// Use a Map to store [subdomain] -> { socket, userId, isPaid }
-const tunnels = new Map<string, { socket: WebSocket; userId: string; isPaid: boolean }>();
+// Local in-memory sockets for this process. Shared presence lives in the database.
+const tunnels = new Map<
+  string,
+  { socket: WebSocket; userId: string; isPaid: boolean; connectionId: string }
+>();
 
-export const registerTunnel = (subdomain: string, socket: WebSocket, userId: string, isPaid: boolean = false) => {
-  tunnels.set(subdomain, { socket, userId, isPaid });
+export const registerTunnel = (
+  subdomain: string,
+  socket: WebSocket,
+  userId: string,
+  connectionId: string,
+  isPaid: boolean = false
+) => {
+  tunnels.set(subdomain, { socket, userId, isPaid, connectionId });
   // Update the lastUsedAt timestamp when tunnel is registered
   updateDomainLastUsed(subdomain);
 };
@@ -16,6 +25,10 @@ export const removeTunnel = (subdomain: string) => {
 
 export const getTunnelSocket = (subdomain: string): WebSocket | undefined => {
   return tunnels.get(subdomain)?.socket;
+};
+
+export const getTunnelConnectionId = (subdomain: string): string | undefined => {
+  return tunnels.get(subdomain)?.connectionId;
 };
 
 export const getTunnelUserId = (subdomain: string): string | undefined => {

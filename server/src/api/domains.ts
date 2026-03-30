@@ -1,26 +1,34 @@
 import { Router } from "express";
+import bcrypt from "bcryptjs";
+import { and, asc, desc, eq } from "drizzle-orm";
+import { z } from "zod";
 import { db } from "../db";
-import { domains, users, domainLogs, PLAN_LIMITS } from "../db/schema";
-import { eq, desc, asc, and } from "drizzle-orm";
+import { domainLogs, domains, users } from "../db/schema";
 import { authMiddleware } from "./auth";
 import { isSubdomainTaken } from "../registry";
 import { getUserPlan } from "./billing";
+import { SERVER_PORT, TUNNEL_BASE_DOMAIN } from "../config";
 
 const router = Router();
 
-// Helper to check if user has paid-tier access (uses subscription OR legacy isPaid flag)
-const hasPaidAccess = async (userId: string, user: { isPaid: boolean; email: string }) => {
-  // Check subscription first
+const accessSettingsSchema = z.object({
+  accessToken: z.string().min(8).max(128).nullable().optional(),
+  basicAuthUsername: z.string().min(1).max(64).nullable().optional(),
+  basicAuthPassword: z.string().min(8).max(128).nullable().optional(),
+});
+
+const hasPaidAccess = async (
+  userId: string,
+  user: { isPaid: boolean; email: string }
+) => {
   const { plan } = await getUserPlan(userId);
-  if (plan !== "free") return true;
-  
-  // Fallback to legacy isPaid flag
+  if (plan !== "free") {
+    return true;
+  }
+
   return user.isPaid;
 };
 
-// GET /api/domains - Get domains for the authenticated user
-// Free users: only see their FIRST domain
-// Paid users: see all domains (paginated)
 router.get("/", authMiddleware, async (req: any, res) => {
   try {
     const userId = req.user.userId;
@@ -28,7 +36,6 @@ router.get("/", authMiddleware, async (req: any, res) => {
     const limit = Math.min(Math.max(1, parseInt(req.query.limit as string) || 20), 100);
     const offset = (page - 1) * limit;
 
-    // Get user to check paid status
     const user = await db.query.users.findFirst({
       where: eq(users.id, userId),
     });
@@ -38,36 +45,32 @@ router.get("/", authMiddleware, async (req: any, res) => {
     }
 
     const isPaid = await hasPaidAccess(userId, user);
-
-    // Get all user domains ordered by creation date (oldest first)
     const userDomains = await db.query.domains.findMany({
       where: eq(domains.userId, userId),
-      orderBy: (domains) => [asc(domains.createdAt)],
+      orderBy: (table) => [asc(table.createdAt)],
     });
 
-    // For free users, only return their first domain
     const visibleDomains = isPaid ? userDomains : userDomains.slice(0, 1);
-    const totalDomains = visibleDomains.length;
-    
-    // Apply pagination
     const paginatedDomains = visibleDomains.slice(offset, offset + limit);
 
-    // Map domains with online status
-    const domainsWithStatus = paginatedDomains.map((domain) => ({
-      subdomain: domain.subdomain,
-      createdAt: domain.createdAt,
-      lastUsedAt: domain.lastUsedAt,
-      isOnline: isSubdomainTaken(domain.subdomain),
-    }));
-
     res.json({
-      domains: domainsWithStatus,
+      domains: paginatedDomains.map((domain) => ({
+        subdomain: domain.subdomain,
+        createdAt: domain.createdAt,
+        lastUsedAt: domain.lastUsedAt,
+        hasAccessToken: Boolean(domain.accessToken),
+        hasBasicAuth: Boolean(
+          domain.basicAuthUsername && domain.basicAuthPasswordHash
+        ),
+        isOnline: isSubdomainTaken(domain.subdomain),
+      })),
       isPaid,
-      totalDomains,
-      domainLimit: isPaid ? null : 1, // null = unlimited
+      totalDomains: visibleDomains.length,
+      domainLimit: isPaid ? null : 1,
       page,
       limit,
-      totalPages: Math.ceil(totalDomains / limit),
+      totalPages: Math.ceil(visibleDomains.length / limit),
+      baseDomain: TUNNEL_BASE_DOMAIN,
     });
   } catch (error) {
     console.error("Get domains error:", error);
@@ -75,12 +78,9 @@ router.get("/", authMiddleware, async (req: any, res) => {
   }
 });
 
-// GET /api/domains/stats - Get domain statistics for the authenticated user
 router.get("/stats", authMiddleware, async (req: any, res) => {
   try {
     const userId = req.user.userId;
-
-    // Get user for paid status
     const user = await db.query.users.findFirst({
       where: eq(users.id, userId),
     });
@@ -90,31 +90,27 @@ router.get("/stats", authMiddleware, async (req: any, res) => {
     }
 
     const isPaid = await hasPaidAccess(userId, user);
-
     const userDomains = await db.query.domains.findMany({
       where: eq(domains.userId, userId),
-      orderBy: (domains) => [desc(domains.lastUsedAt)],
+      orderBy: (table) => [desc(table.lastUsedAt)],
     });
 
-    const domainCount = userDomains.length;
-    const lastUsedDomain = userDomains.find((d) => d.lastUsedAt !== null);
-    const lastUsedAt = lastUsedDomain?.lastUsedAt || null;
-
-    // Get log count for paid users
     let totalLogs = 0;
     if (isPaid) {
       const logs = await db.query.domainLogs.findMany({
         where: eq(domainLogs.userId, userId),
+        columns: { id: true },
       });
       totalLogs = logs.length;
     }
 
     res.json({
-      domainCount,
-      lastUsedAt,
+      domainCount: userDomains.length,
+      lastUsedAt: userDomains.find((domain) => domain.lastUsedAt)?.lastUsedAt || null,
       isPaid,
       domainLimit: isPaid ? null : 1,
-      totalLogs: isPaid ? totalLogs : null, // Hide from free users
+      totalLogs: isPaid ? totalLogs : null,
+      activeDomains: userDomains.filter((domain) => isSubdomainTaken(domain.subdomain)).length,
     });
   } catch (error) {
     console.error("Get domain stats error:", error);
@@ -122,12 +118,9 @@ router.get("/stats", authMiddleware, async (req: any, res) => {
   }
 });
 
-// GET /api/domains/logs - Get request logs (PAID ONLY)
 router.get("/logs", authMiddleware, async (req: any, res) => {
   try {
     const userId = req.user.userId;
-
-    // Get user to check paid status
     const user = await db.query.users.findFirst({
       where: eq(users.id, userId),
     });
@@ -137,34 +130,29 @@ router.get("/logs", authMiddleware, async (req: any, res) => {
     }
 
     if (!(await hasPaidAccess(userId, user))) {
-      return res.status(403).json({ 
+      return res.status(403).json({
         error: "Logs are a paid feature. Upgrade to access request history.",
         isPaid: false,
       });
     }
 
-    // Get query params for filtering
     const subdomain = req.query.subdomain as string | undefined;
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
     const limit = Math.min(Math.max(1, parseInt(req.query.limit as string) || 50), 200);
     const offset = (page - 1) * limit;
 
-    // Build query
     const whereClause = subdomain
       ? and(eq(domainLogs.userId, userId), eq(domainLogs.subdomain, subdomain))
       : eq(domainLogs.userId, userId);
 
-    // Get total count
     const allLogs = await db.query.domainLogs.findMany({
       where: whereClause,
       columns: { id: true },
     });
-    const totalLogs = allLogs.length;
 
-    // Get paginated logs
     const logs = await db.query.domainLogs.findMany({
       where: whereClause,
-      orderBy: (logs) => [desc(logs.createdAt)],
+      orderBy: (table) => [desc(table.createdAt)],
       limit,
       offset,
     });
@@ -174,8 +162,8 @@ router.get("/logs", authMiddleware, async (req: any, res) => {
       isPaid: true,
       page,
       limit,
-      totalLogs,
-      totalPages: Math.ceil(totalLogs / limit),
+      totalLogs: allLogs.length,
+      totalPages: Math.ceil(allLogs.length / limit),
     });
   } catch (error) {
     console.error("Get logs error:", error);
@@ -183,7 +171,133 @@ router.get("/logs", authMiddleware, async (req: any, res) => {
   }
 });
 
-// Update last used timestamp for a domain
+router.get("/logs/:logId", authMiddleware, async (req: any, res) => {
+  try {
+    const userId = req.user.userId;
+    const log = await db.query.domainLogs.findFirst({
+      where: and(eq(domainLogs.id, req.params.logId), eq(domainLogs.userId, userId)),
+    });
+
+    if (!log) {
+      return res.status(404).json({ error: "Log not found" });
+    }
+
+    res.json({ log });
+  } catch (error) {
+    console.error("Get log detail error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/logs/:logId/replay", authMiddleware, async (req: any, res) => {
+  try {
+    const userId = req.user.userId;
+    const log = await db.query.domainLogs.findFirst({
+      where: and(eq(domainLogs.id, req.params.logId), eq(domainLogs.userId, userId)),
+    });
+
+    if (!log) {
+      return res.status(404).json({ error: "Log not found" });
+    }
+
+    if (log.method === "WS") {
+      return res.status(400).json({ error: "WebSocket log replay is not supported" });
+    }
+
+    const headers: Record<string, string> = {
+      ...((log.requestHeaders as Record<string, string>) || {}),
+      host: `${log.subdomain}.${TUNNEL_BASE_DOMAIN}`,
+    };
+    delete headers["content-length"];
+
+    const replayResponse = await fetch(`http://127.0.0.1:${SERVER_PORT}${log.path}`, {
+      method: log.method,
+      headers,
+      body: log.requestBody || undefined,
+    });
+
+    const responseBody = await replayResponse.text();
+    res.json({
+      statusCode: replayResponse.status,
+      headers: Object.fromEntries(replayResponse.headers.entries()),
+      bodyPreview: responseBody.slice(0, 4096),
+    });
+  } catch (error) {
+    console.error("Replay log error:", error);
+    res.status(500).json({ error: "Failed to replay request" });
+  }
+});
+
+router.get("/:subdomain/access", authMiddleware, async (req: any, res) => {
+  try {
+    const domain = await db.query.domains.findFirst({
+      where: and(
+        eq(domains.subdomain, req.params.subdomain),
+        eq(domains.userId, req.user.userId)
+      ),
+    });
+
+    if (!domain) {
+      return res.status(404).json({ error: "Domain not found" });
+    }
+
+    res.json({
+      subdomain: domain.subdomain,
+      hasAccessToken: Boolean(domain.accessToken),
+      basicAuthUsername: domain.basicAuthUsername,
+      hasBasicAuth: Boolean(
+        domain.basicAuthUsername && domain.basicAuthPasswordHash
+      ),
+    });
+  } catch (error) {
+    console.error("Get domain access settings error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/:subdomain/access", authMiddleware, async (req: any, res) => {
+  try {
+    const settings = accessSettingsSchema.parse(req.body);
+    const domain = await db.query.domains.findFirst({
+      where: and(
+        eq(domains.subdomain, req.params.subdomain),
+        eq(domains.userId, req.user.userId)
+      ),
+    });
+
+    if (!domain) {
+      return res.status(404).json({ error: "Domain not found" });
+    }
+
+    const basicAuthPasswordHash = settings.basicAuthPassword
+      ? await bcrypt.hash(settings.basicAuthPassword, 10)
+      : settings.basicAuthUsername === null
+      ? null
+      : domain.basicAuthPasswordHash;
+
+    await db
+      .update(domains)
+      .set({
+        accessToken:
+          settings.accessToken === undefined ? domain.accessToken : settings.accessToken,
+        basicAuthUsername:
+          settings.basicAuthUsername === undefined
+            ? domain.basicAuthUsername
+            : settings.basicAuthUsername,
+        basicAuthPasswordHash,
+      })
+      .where(eq(domains.subdomain, domain.subdomain));
+
+    res.json({ success: true });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.issues[0]?.message || "Invalid request" });
+    }
+    console.error("Update domain access settings error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export const updateDomainLastUsed = async (subdomain: string) => {
   try {
     await db
@@ -195,23 +309,36 @@ export const updateDomainLastUsed = async (subdomain: string) => {
   }
 };
 
-// Log a request (for paid users only)
-export const logDomainRequest = async (
-  subdomain: string,
-  userId: string,
-  method: string,
-  path: string,
-  statusCode: number | null,
-  responseTime: number | null
-) => {
+export const logDomainRequest = async (input: {
+  subdomain: string;
+  userId: string;
+  method: string;
+  path: string;
+  statusCode: number | null;
+  responseTime: number | null;
+  bytesIn: number;
+  bytesOut: number;
+  requestHeaders?: Record<string, unknown>;
+  responseHeaders?: Record<string, unknown>;
+  requestBody?: string;
+  responseBody?: string;
+  errorMessage?: string | null;
+}) => {
   try {
     await db.insert(domainLogs).values({
-      subdomain,
-      userId,
-      method,
-      path,
-      statusCode,
-      responseTime,
+      subdomain: input.subdomain,
+      userId: input.userId,
+      method: input.method,
+      path: input.path,
+      statusCode: input.statusCode,
+      responseTime: input.responseTime,
+      bytesIn: input.bytesIn,
+      bytesOut: input.bytesOut,
+      requestHeaders: input.requestHeaders,
+      responseHeaders: input.responseHeaders,
+      requestBody: input.requestBody,
+      responseBody: input.responseBody,
+      errorMessage: input.errorMessage ?? null,
     });
   } catch (error) {
     console.error("Log request error:", error);
